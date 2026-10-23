@@ -139,13 +139,23 @@ def is_flapping(version_seq: Iterable[str | None], min_length: int = 4) -> bool:
     signature of a half-patched backend joining a rotation — IS flapping. Requiring
     the entire history to alternate would call it steady and then count every one of
     its bounces as a genuine upgrade in Stage 7.
+
+    `min_length` is the window size, and alternation is unexpressible below 3
+    readings: A,B is a change, A,B,A is a flap. A 2-reading window has no index `i`
+    with `i+2` in range, so its "every pair repeats" test is vacuously true and would
+    call every domain with two identical readings a flapper — which, wired to
+    `flapping_domains(min_length=2)`, would suppress the entire Stage 7 upgrade count.
+    Hence the floor below rather than a clamp, so a caller asking for 2 is refused
+    loudly by behaviour and by test rather than silently getting 3.
     """
     vals = [v for v in (norm_version(x) for x in version_seq) if v is not None]
-    if min_length < 2 or len(vals) < min_length:
+    if min_length < 3 or len(vals) < min_length:
         return False
 
     def alternates(window: list[tuple[int, int, int]]) -> bool:
         # every third reading repeats the one before it: A,B,A,B...
+        if len(window) < 3:
+            return False
         return all(window[i] == window[i + 2] and window[i] != window[i + 1]
                    for i in range(len(window) - 2))
 
@@ -198,7 +208,12 @@ def events_between(prev: "RowLike", cur: "RowLike",
             fixed = fixed_for_branch((cv[0], cv[1]))
             out.append(_event(cur, "version_increase", prev,
                               {"branch_has_official_fix": fixed is not None,
-                               "now_at_or_above_fixed": fixed is None or cv >= fixed,
+                               # Was `fixed is None or cv >= fixed`, which is vacuously
+                               # TRUE on every branch with no published fix — 8.1.90 ->
+                               # 8.1.91 would report "now at or above fixed" beside
+                               # "no official fix exists". Nothing is proven when there
+                               # is no fixed version to be at or above; say False.
+                               "now_at_or_above_fixed": fixed is not None and cv >= fixed,
                                "note": "version rose between snapshots"}))
         else:
             out.append(_event(cur, "version_decrease", prev,
@@ -218,6 +233,16 @@ def detect_changes(conn, run_id: str) -> list[dict[str, Any]]:
     keyed on run ids, the reversed rows would land in `events` beside the correct
     ones and quietly corrupt the Stage 7 upgrade counts. db.prior_observation() is
     the single-row form of the same `started_at_utc <` rule; this is its list twin.
+
+    Known limits, stated rather than hidden. `limit=13` is not the flap lookback and
+    does not need to be: the A->B->A rule in events_between() only reads the two
+    readings before the current one, so 13 is generous (flapping_domains() is the
+    caller that wants a long window, and asks for its own). And the `started_at_utc <`
+    filter assumes per-observation timestamps strictly increase between runs —
+    fetch.py stamps each observation with utc_now_iso(), so two snapshots captured
+    inside the same second would compare equal and the earlier row would drop out,
+    making the later one look like a first sighting with no events. Unreachable at one
+    snapshot a day, and the reason backfills must not re-use a run id.
     """
     events: list[dict[str, Any]] = []
     rows = conn.execute(
@@ -234,7 +259,15 @@ def detect_changes(conn, run_id: str) -> list[dict[str, Any]]:
 
 
 def flapping_domains(conn, run_id: str | None = None, min_length: int = 4) -> list[str]:
-    """Domains whose visible version alternates. Needs >= min_length visible readings."""
+    """Domains whose visible version alternates. Needs >= min_length visible readings.
+
+    `run_id` selects WHICH DOMAINS are asked about, not the history window: the verdict
+    always uses the domain's full stored history (up to `limit=50` readings, ~7 weeks of
+    daily snapshots), so a domain that only began alternating in later snapshots is still
+    reported. There is no "as of this run" promise here — detect_changes() is the
+    point-in-time function. Callers wanting a historical cut must filter the sequence
+    themselves.
+    """
     q = "SELECT DISTINCT domain FROM observations"
     args: tuple = ()
     if run_id:

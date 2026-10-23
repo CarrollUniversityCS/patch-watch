@@ -377,16 +377,19 @@ def test_crossing_the_published_fix_is_an_official_fix(branch, lo, hi):
     ("8.6.0", "8.6.1", PATCHED),        # newer than any known-vulnerable branch
 ])
 def test_upgrade_on_a_branch_with_no_official_fix_is_flagged(lo, hi, cls):
-    """branch_has_official_fix False: a number went up, nothing was proven patched.
+    """branch_has_official_fix False AND now_at_or_above_fixed False.
 
-    now_at_or_above_fixed is True here only vacuously (`fixed is None`,
-    src/detect.py:177) - see the module note in tests/test_detect.py's bug report.
+    The second flag used to read `fixed is None or cv >= fixed`, which is vacuously TRUE
+    whenever the branch has no published fix — so 8.1.90 -> 8.1.91 came out saying
+    "no official fix exists" and "now at or above the fixed version" in the same
+    detail_json. There is nothing to be at or above, so the honest answer is False.
+    Fixed in src/detect.py events_between(); both flags now agree.
     """
     events = events_between(row("run_1", cls, lo), row("run_2", cls, hi))
     assert types(events) == ["version_increase"]
     d = detail(one(events, "version_increase"))
     assert d["branch_has_official_fix"] is False
-    assert d["now_at_or_above_fixed"] is True
+    assert d["now_at_or_above_fixed"] is False
 
 
 def test_class_change_alone_when_the_ranked_version_is_unchanged():
@@ -634,9 +637,39 @@ def test_flapping_is_scanned_per_window_not_over_the_whole_sequence():
     (["8.3.35", "8.3.36"] * 4, 8, True),
     (["8.3.30", "8.3.35", "8.3.36", "8.3.35", "8.3.36"], 4, True),   # window at the end
     (["8.3.30", "8.3.35", "8.3.36", "8.3.35", "8.3.36"], 5, False),  # prefix blocks five
+    (["8.3.35", "8.3.35"], 2, False),      # the vacuous-window case, see below
+    (["8.3.35", "8.3.36"] * 4, 2, False),  # a real flap, but 2 cannot PROVE one
+    (["8.3.35", "8.3.36", "8.3.35"], 1, False),
 ])
 def test_is_flapping_min_length_knob(seq, min_length, want):
     assert is_flapping(seq, min_length=min_length) is want
+
+
+def test_min_length_below_three_cannot_prove_a_flap():
+    """Regression, found by child A on 2026-10-23: a 2-reading window was vacuously
+    'alternating', and I wrote that bug while fixing a different one.
+
+    `all(...)` over `range(len(window) - 2)` is True for a 2-long window because there is
+    no index i with i+2 in range. So with min_length=2, EVERY domain with two or more
+    visible readings was called a flapper - including one that reported 8.3.35 twice and
+    never moved. Verified before the fix: is_flapping(['8.3.35','8.3.35'], min_length=2)
+    returned True.
+
+    Blast radius if anyone had passed 2: Stage 7 uses this predicate to keep backend
+    variance out of the 'true upgrade' counts, so every domain would have been discarded
+    as noise and the study would have reported zero upgrades for the whole year. Latent
+    only because every caller so far uses the default of 4.
+
+    The fix floors at 3 instead of clamping 2 up to 3: alternation needs A,B,A to be
+    distinguishable from a single change, so 'no flap provable' is the honest answer to
+    a 2-reading window, and silently reading the caller's 2 as 3 would hide the mistake.
+    """
+    assert is_flapping(["8.3.35", "8.3.35"], min_length=2) is False
+    assert is_flapping(["8.3.35", "8.3.36"], min_length=2) is False
+    assert is_flapping(["8.3.35", "8.3.36", "8.3.35", "8.3.36"], min_length=2) is False
+    assert is_flapping(["8.3.35", "8.3.36", "8.3.35"], min_length=0) is False
+    # the same sequence at the smallest provable window IS a flap
+    assert is_flapping(["8.3.35", "8.3.36", "8.3.35"], min_length=3) is True
 
 
 def test_is_flapping_counts_visible_readings_not_rows():
@@ -829,6 +862,7 @@ def test_flapping_domains_run_id_filter(flap_db, run_id, expected):
     (4, ["flap.gov"]),
     (5, ["flap.gov"]),           # flap.gov has exactly five visible readings
     (6, []),                     # one reading short of the bar
+    (2, []),                     # below 3 proves nothing; used to report ALL FIVE domains
 ])
 def test_flapping_domains_honours_min_length(flap_db, min_length, expected):
     assert flapping_domains(flap_db, min_length=min_length) == expected

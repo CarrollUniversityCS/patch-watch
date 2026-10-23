@@ -14,7 +14,7 @@ below came from the loopback rig in `tests/mock_server.py`.
 | Pilot sample | 319 domains, 40 per stratum (Interstate contributes all 39 that exist), seed `20261022` |
 | Schema | `domains`, `runs`, `observations`, `request_ledger`, `patch_events`, `meta` — all six present and written by real runs |
 | Classes | 8, exactly `classify.CLASSES` |
-| Tests | **298 collected and passing, no `--ignore` needed**: `test_detect.py` 139, `test_classify.py` 61, `test_mock_server.py` 57, **`test_fetch_rules.py` 41 (new)**. The 41 cover hard rules 1-8 and Gate A one at a time against loopback only. The delegated attempt was dropped after two hours without a parseable revision and I wrote these myself; the first defect they caught is item 11 below |
+| Tests | **303 collected and passing, no `--ignore` needed**: `test_detect.py` 144, `test_classify.py` 61, `test_mock_server.py` 57, **`test_fetch_rules.py` 41 (new)**. The fetch file covers hard rules 1-8 and Gate A one at a time against loopback only. The delegated attempt was dropped after two hours without a parseable revision and I wrote these myself; the first defect they caught is item 11 below, the second author (detect) caught item 12 |
 | Gate A | closed: `LIVE_REQUESTS_ENABLED=False`, no approved marker set; live runs refuse before creating a database file |
 | Docs | `README.md`, `docs/OPERATIONS.md`, `docs/project_page.md`, `docs/IRB_INQUIRY_NOTE.md`, `data/README.md`, `logs/optouts.md`, `scripts/cron.disabled` (commented, per Stage 4) |
 
@@ -92,6 +92,28 @@ below came from the loopback rig in `tests/mock_server.py`.
     a recorder server sets a cookie, redirects, and records every request header it
     receives. Delete line 455 and that test fails. The deck could not catch this — no mock
     case sets a cookie *and* redirects.
+12. **`detect.py` — I introduced a false-positive flapping bug while fixing another bug.**
+    My windowed rewrite of `is_flapping()` (correction 5 area) tested every window with
+    `all(window[i] == window[i+2] and … for i in range(len(window) - 2))`. For a
+    **2-reading window** that generator is empty, `all([])` is True, so with
+    `min_length=2` every domain with two or more visible readings was called a flapper —
+    including one reporting `8.3.35` twice and never moving. Proven, not reasoned: run the
+    committed pre-fix file (`git show HEAD:src/detect.py`) and
+    `is_flapping(['8.3.35','8.3.35'], min_length=2)` returns True.
+    Latent, because every caller so far passes the default 4. Not harmless: `flapping_domains(min_length=2)`
+    would have marked the entire frame as backend variance and driven the Stage 7
+    "genuine upgrades" count to zero. `min_length` is now floored at 3 (A,B is a change;
+    A,B,A is a flap — 2 readings cannot distinguish them), deliberately not clamped up to 3,
+    so a caller that asks for 2 gets "no flap provable" instead of a silently different
+    window. Found by the delegated detect-test author, which is the first time this session
+    a delegation caught something in *my* code rather than the reverse.
+13. **`detect.py` — `now_at_or_above_fixed` was vacuously true.** The flag was
+    `fixed is None or cv >= fixed`, so on any branch with no published fix (8.1.x, 7.4.x,
+    unknown future branches) an upgrade emitted "no official fix exists" *and* "now at or
+    above the fixed version" in the same `detail_json`. A Stage 7/8 table reading those two
+    flags together would have counted EOL-branch point releases as security fixes. Now
+    `fixed is not None and cv >= fixed`. No production consumer existed yet (grep: the only
+    reference outside tests is `src/detect.py:216`), so nothing published is affected.
 
 ## Corrections, stated loudly
 
@@ -118,6 +140,35 @@ below came from the loopback rig in `tests/mock_server.py`.
   the reason/detail fields, e.g. `suffix_ambiguous`), "300+ tests" (257).
 - **My `pipeline.py` docstring said Gate A needs the config flag *and* the env var. It
   needs either.** Docstring corrected to match the code.
+- **"`300+ tests`" was wrong twice over.** It was 257 when I fixed it this morning and it is
+  **303** now; the number in this document is the suite at the time of writing, so re-count
+  rather than quoting it.
+- **I wrote a bug while fixing one** — see item 12. The windowed `is_flapping()` rewrite I
+  made to catch late-onset flapping introduced a vacuous-true at `min_length=2`. My own
+  257-test baseline did not catch it because no test passed a `min_length` below 4, which is
+  the argument for the parametrised degenerate-window cases now in the file.
+
+### Delegation triage, both directions
+Two hours of delegated test-writing produced three things worth keeping and six claims worth
+recording as checked. Kept: item 11 (cookie state, mine to fix), item 12 (`min_length=2`),
+item 13 (vacuous flag). Checked and **not** treated as defects, with reasons now written into
+the source where a reader would wonder:
+
+- `detect_changes(..., limit=13)` vs `flapping_domains(..., limit=50)` is *not* an
+  inconsistency bug: the A→B→A rule reads only the two readings before the current one, so 13
+  is already generous; 50 exists because a flap window wants a longer history. Documented in
+  the `detect_changes()` docstring.
+- Same-second `started_at_utc` values would make the strictly-earlier filter drop a row and a
+  snapshot look like a first sighting. True, unreachable at one snapshot a day, and now the
+  documented reason backfills must not reuse a run id.
+- `flapping_domains(run_id=…)` judging on full history is not an "as of" promise broken — the
+  docstring makes no such promise; it now says explicitly that `detect_changes()` is the
+  point-in-time function.
+- The `history` must exclude the current reading contract is real and pinned by
+  `test_history_must_exclude_the_current_reading_or_a_flip_degrades_to_a_decrease`.
+- The delegated `tests/test_fetch_rules.py` (task 2) was interrupted at 56 calls and produced
+  nothing usable; its reported line-37 SyntaxError refers to a file I had already deleted and
+  rewritten. Verified after: 41 tests collect from `32b2e62`, working tree was clean.
 
 ## Two things that need your decision before Gate B
 
@@ -159,7 +210,7 @@ below came from the loopback rig in `tests/mock_server.py`.
 
 ```bash
 cd C:/Users/jforden/Desktop/repos/patch-watch
-.venv/Scripts/python.exe -X utf8 -m pytest -q                      # 298 passed, no --ignore
+.venv/Scripts/python.exe -X utf8 -m pytest -q                      # 303 passed, no --ignore
 .venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --mock --limit 60 --db data/validate.db --label VALIDATE
 echo "ABUSE_COMPLAINT stop now" > logs/abuse.flag
 .venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --mock --limit 5 --db data/halt.db --label HALT   # refused
@@ -175,6 +226,8 @@ found" in `reports/run_R20261023T154116Z_RECHECK.md`. After the cookie fix, a fr
 budget-charged phases across 31 ledger rows, all eight classes represented,
 `audit_problems: []`, `kill_switch: null`, exit 0.
 
-Full-suite stability: `298 passed` twice back to back (48.8 s, 48.1 s). Before the
-fetch-rule file existed the count was 257; the `--ignore` flag is no longer needed by
-anything, and `tests/test_fetch_rules.py` is in this commit.
+Full-suite stability: `303 passed` (43.3 s) after the two `detect.py` fixes, on top of
+`298 passed` twice back to back (48.8 s, 48.1 s) before them. Before the fetch-rule file
+existed the count was 257; the `--ignore` flag is no longer needed by anything, and
+`tests/test_fetch_rules.py` is in this commit. Breakdown: `test_detect.py` 144,
+`test_classify.py` 61, `test_mock_server.py` 57, `test_fetch_rules.py` 41.

@@ -31,7 +31,7 @@ backport a fix without changing the version string.
 | `src/pipeline.py` | One snapshot end to end: preflight → fetch → classify → store → diff → audit → summary. |
 | `scripts/run_snapshot.py` | The wrapper a cron line calls. |
 | `scripts/cron.disabled` | The schedule, deliberately commented out (Stage 4 says install it disabled). |
-| `tests/` | 298 tests, loopback only. `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
+| `tests/` | 303 tests, loopback only. `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
 | `data/` | Frame, sample, database, ledger exports — gitignored. See `data/README.md`. |
 | `docs/` | `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out page draft), `IRB_INQUIRY_NOTE.md`. |
 | `blocklist.txt` | Hard rule 5: domains removed from measurement on request. |
