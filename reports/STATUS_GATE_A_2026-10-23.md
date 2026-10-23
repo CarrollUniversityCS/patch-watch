@@ -14,7 +14,7 @@ below came from the loopback rig in `tests/mock_server.py`.
 | Pilot sample | 319 domains, 40 per stratum (Interstate contributes all 39 that exist), seed `20261022` |
 | Schema | `domains`, `runs`, `observations`, `request_ledger`, `patch_events`, `meta` — all six present and written by real runs |
 | Classes | 8, exactly `classify.CLASSES` |
-| Tests | 257 collected and passing: `test_detect.py` 139, `test_classify.py` 61, `test_mock_server.py` 57. **`src/fetch.py` — the module that enforces every hard rule — has no green tests yet.** `tests/test_fetch_rules.py` is the delegated attempt and does not parse; excluded from the Stage 5 commit. Until it lands, run with `--ignore=tests/test_fetch_rules.py` |
+| Tests | **298 collected and passing, no `--ignore` needed**: `test_detect.py` 139, `test_classify.py` 61, `test_mock_server.py` 57, **`test_fetch_rules.py` 41 (new)**. The 41 cover hard rules 1-8 and Gate A one at a time against loopback only. The delegated attempt was dropped after two hours without a parseable revision and I wrote these myself; the first defect they caught is item 11 below |
 | Gate A | closed: `LIVE_REQUESTS_ENABLED=False`, no approved marker set; live runs refuse before creating a database file |
 | Docs | `README.md`, `docs/OPERATIONS.md`, `docs/project_page.md`, `docs/IRB_INQUIRY_NOTE.md`, `data/README.md`, `logs/optouts.md`, `scripts/cron.disabled` (commented, per Stage 4) |
 
@@ -69,6 +69,29 @@ below came from the loopback rig in `tests/mock_server.py`.
     *budget-charged phases* (`obs.sends` = the phase sequence number from `Budget.take()`);
     ledger rows also include same-domain redirect hops, which rule 2 permits inside one
     phase and the budget does not charge. It now says so in those words.
+11. **`fetch.py` — we were sending cookies. Real hard-rule-2 defect, found and fixed today.**
+    `httpx.AsyncClient(cookies=None)` only starts the jar empty. httpx 0.28.1 runs
+    `client.cookies.extract_cookies(response)` after **every** response (confirmed in
+    `httpx/_client.py`, `_send_single_request`), and the crawler reuses one client across
+    same-domain redirect hops. So a site that answered hop 1 with `Set-Cookie` had that
+    cookie echoed back to it on hop 2 — a session-state footprint the code comment at
+    `src/fetch.py:397` explicitly denies ("deliberately no Cookie header, ever"). Fixed at
+    `src/fetch.py:455`: `client.cookies.clear()` after each response.
+
+    Scope of the exposure, so this is not over-read: it never crossed domains (a client is
+    built per domain visit inside `Crawler.fetch()`), and it never replayed an HTTPS cookie
+    over the plain-HTTP fallback, because that branch requires `not obs.headers_raw` — no
+    response, therefore no cookie. And **nothing live was ever affected**: Gate A has been
+    closed for the entire project, so the only server that ever received such a header is
+    our own loopback mock. `docs/project_page.md:21` promises "We do not send cookies and we
+    do not accept them" — accurate as of today, not accurate an hour ago. The page is
+    unpublished, so nothing needs retracting outside this repo.
+
+    The test that catches it is
+    `tests/test_fetch_rules.py::test_rule2_no_cookie_state_carries_into_the_next_request`:
+    a recorder server sets a cookie, redirects, and records every request header it
+    receives. Delete line 455 and that test fails. The deck could not catch this — no mock
+    case sets a cookie *and* redirects.
 
 ## Corrections, stated loudly
 
@@ -118,17 +141,14 @@ below came from the loopback rig in `tests/mock_server.py`.
 
 ## Open
 
-- **The untested module is the safety-critical one.** `src/fetch.py` holds approved-set
-  containment, the request budget, the redirect policy, the no-cookie rule, the 64 KB cap,
-  the blocklist, the kill switch, the per-IP limit, the ledger audit and Gate A — and has
-  0 passing tests, because all 257 green ones target classify/detect/mock. I verified the
-  individual behaviours by hand against source and with scratch probes this session
-  (5xx counting, abuse-flag refusal, redirect refusal, crash containment), which is better
-  than nothing and much worse than a test suite. `tests/test_fetch_rules.py` is the fix and
-  is not ready: one bad line at 805 (`del scenario, hi if False else None`), twice
-  re-offending with the same idiom, so I steered it with the exact fix and a wrap-up
-  procedure. Until it lands, run the suite with `--ignore=tests/test_fetch_rules.py`. It is
-  excluded from the Stage 5 commit.
+- ~~**The untested module is the safety-critical one.**~~ **Closed 2026-10-23.**
+  `src/fetch.py` — approved-set containment, the request budget, the redirect policy, the
+  no-cookie rule, the 64 KB cap, the blocklist, the kill switch, the per-IP limit, the
+  ledger audit and Gate A — now has 41 rule-by-rule tests of its own
+  (`tests/test_fetch_rules.py`), and the first defect they caught was a real one: item 11,
+  cookie state riding across redirect hops. The delegated file was dropped (two hours,
+  never parseable, same bad idiom twice) and I wrote these against the source myself.
+  What loopback still cannot test is the next bullet, and that gap is honest, not hidden.
 - Nothing in this repo has been exercised against a real government web server, including
   the kill switch's rolling 10%-of-50 window, the per-IP limit across genuinely distinct
   IPs (mock mode serialises everything onto `127.0.0.1`), and the change detector under
@@ -139,7 +159,7 @@ below came from the loopback rig in `tests/mock_server.py`.
 
 ```bash
 cd C:/Users/jforden/Desktop/repos/patch-watch
-.venv/Scripts/python.exe -X utf8 -m pytest -q --ignore=tests/test_fetch_rules.py   # 257 passed
+.venv/Scripts/python.exe -X utf8 -m pytest -q                      # 298 passed, no --ignore
 .venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --mock --limit 60 --db data/validate.db --label VALIDATE
 echo "ABUSE_COMPLAINT stop now" > logs/abuse.flag
 .venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --mock --limit 5 --db data/halt.db --label HALT   # refused
@@ -150,6 +170,11 @@ Last mock validation runs (loopback only): 60 domains → 60 budget-charged phas
 ledger rows, all eight classes represented (12 patched / 12 vulnerable-by-version / 6 each
 of the rest), `audit_problems: []`, `kill_switch: null`, exit 0. A second 25-domain run with
 `--mock-rotate 1` → 31 ledger rows, 2 `NO_RESPONSE` from the dead-port case, "No violations
-found" in `reports/run_R20261023T154116Z_RECHECK.md`.
+found" in `reports/run_R20261023T154116Z_RECHECK.md`. After the cookie fix, a fresh
+25-domain loopback run (`--label C1`, `reports/run_RC20261023T18COOKIE.md`) gave 25
+budget-charged phases across 31 ledger rows, all eight classes represented,
+`audit_problems: []`, `kill_switch: null`, exit 0.
 
-Full-suite stability after the timing fix: `257 passed` twice back to back (31.5 s each).
+Full-suite stability: `298 passed` twice back to back (48.8 s, 48.1 s). Before the
+fetch-rule file existed the count was 257; the `--ignore` flag is no longer needed by
+anything, and `tests/test_fetch_rules.py` is in this commit.

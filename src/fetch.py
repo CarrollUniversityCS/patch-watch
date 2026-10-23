@@ -448,6 +448,11 @@ class Crawler:
                 obs.php_hints.update(derive_body_hints(bytes(body)))
                 obs.body_length_read = body_len
                 del body  # rule 2: never store bodies
+                # Rule 2 also says no session state. `cookies=None` at construction only
+                # starts the jar empty: httpx calls `client.cookies.extract_cookies(resp)`
+                # on EVERY response (httpx/_client.py, 0.28.1), so a Set-Cookie on one
+                # same-domain redirect hop would ride into the next request. Drop it.
+                client.cookies.clear()
 
                 if status in (429, 503):
                     obs.backoff = True           # rule 4: do not retry in this snapshot
@@ -695,10 +700,10 @@ def audit_ledger(ledger_rows: list[dict[str, Any]], budget_counts: dict[str, int
     proves nothing:
 
     * no domain charged more sends than rule 2 allows;
-    * every host the ledger recorded as SENT sits in an approved root. Off-domain
-      redirects are not ledger rows at all (src/fetch.py:451 refuses them before
+    * every host the ledger recorded an ATTEMPT against sits in an approved root.
+      Off-domain redirects are not ledger rows at all (src/fetch.py:451 refuses them before
       any request goes out and records them in `redirect_chain`), so a row here is
-      a request we really made;
+      traffic we really put on the wire, or tried to;
     * the ledger's own view of how many phases a domain used agrees with the Budget
       counter that authorised them. More phases in the ledger than in the counter
       means a send happened that rule 2 never approved. FEWER is expected and is

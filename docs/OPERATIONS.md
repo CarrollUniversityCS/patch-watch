@@ -127,6 +127,16 @@ recorded and the redirect is **not** followed) · `MAX_BODY_BYTES` 65536, body d
 never stored · connect 10 s / total 20 s · jitter 0.1–0.5 s · no `Cookie` header, ever ·
 `User-Agent: CarrollPHPStudy/1.0 (+https://github.com/JForden/JForden; jforden@carrollu.edu)`.
 
+**Maintenance trap, learned the hard way on 2026-10-23.** That last-but-one bullet is not
+free. `httpx.AsyncClient(cookies=None)` only starts the jar empty — httpx then stores every
+`Set-Cookie` it receives onto the client and replays it on the next request from that
+client, which here means the next redirect hop. The guard is one line,
+`client.cookies.clear()` at `src/fetch.py:455`, and `tests/test_fetch_rules.py`'s
+no-cookie test fails if you delete it or if you refactor the crawler to reuse a client
+across a cookie-setting response. If you ever swap HTTP libraries, that test is the thing
+to port first, because the failure mode is silent and breaks a promise made on the public
+page and in the IRB note.
+
 **Wording mismatch to settle before the page goes live.** The brief's public-page text
 promises "at most 2 requests per domain per day"; the code allows 3 phases (primary,
 redirect chain, HTTP fallback), and `docs/project_page.md` says three because the code is
