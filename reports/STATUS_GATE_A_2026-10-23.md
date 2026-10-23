@@ -170,25 +170,80 @@ the source where a reader would wonder:
   nothing usable; its reported line-37 SyntaxError refers to a file I had already deleted and
   rewritten. Verified after: 41 tests collect from `32b2e62`, working tree was clean.
 
-## Two things that need your decision before Gate B
+## Decisions before Gate B
+
+### Decided by you on 2026-10-23
+
+1. **Three request phases stay; the public page now matches the code.** You asked whether
+   three passes are actually needed. They are, and the two extra ones are not redundant with
+   each other — each fires on a different failure and each prevents a distinct measurement
+   error (`src/fetch.py:562`, `src/fetch.py:578`):
+
+   | Phase | Fires when | What goes wrong without it |
+   |---|---|---|
+   | `https` | always | — |
+   | `https_unverified` | TLS **verification** failed and no headers were read | broken-chain sites recorded as unreachable |
+   | `http_fallback` | HTTPS produced no response, **connect error or timeout**, not DNS | HTTP-only hosts recorded `NO_RESPONSE` |
+
+   Verification-failed and connect-failed are different exceptions, so one domain can hit
+   both in a day — that is the only way to reach 3. Typical load is exactly one request, and
+   that is measured, not hoped: in the 60-domain loopback validation run every observation has
+   `sends = 1`, and the 78 ledger rows are 54 one-row domains plus 6 redirecting domains that
+   took 4 rows *inside* that single send — the deck's `redirect_loop` case, each ending
+   `status=302, error_type=redirect_limit`. Four HTTP requests, one charged send: that is why
+   the page has to describe phases and hops separately. Each phase is pinned on its own by
+   `tests/test_fetch_rules.py` — `:226` fallback fires exactly once, `:241` a DNS failure must
+   not trigger it, `:253` a cert failure gets exactly one unverified retry and no more, `:262`
+   a fourth phase is refused, `:209`/`:471` the hop bound and the audit ceiling agree.
+   `MAX_SENDS_PER_DOMAIN` stays 3, its comment now says "3 budget-charged PHASES, not raw
+   requests", `docs/project_page.md` is rewritten to say one normally / two if either fires /
+   three if both, and the brief's "at most 2 per day" is superseded.
+
+   One number the old page got wrong in **our favour**, which I corrected while rewriting it:
+   the sentence "at most three requests per domain per day, which covers the homepage request,
+   a same-site redirect, and one plain-HTTP fallback" mis-described the phases — redirect hops
+   are *not* budget-charged, they are free rows inside a phase. A site that redirects three
+   hops on every phase can legitimately see up to `3 x (3 + 1) = 12` HTTP requests in a day,
+   the exact ceiling `Ledger.violations()` audits. The page now says that in plain words,
+   because an operator counting log lines will notice otherwise.
+
+2. **Identity URL: your GitHub profile README, and the wording now says so.** `PROJECT_URL`
+   is `https://github.com/JForden/JForden` and stays there; the notice is the profile README,
+   not a hosted site. Updated in `docs/project_page.md` ("the address of this notice — my
+   GitHub profile README"), `docs/IRB_INQUIRY_NOTE.md` (was: "a public project page"),
+   `README.md`, `src/config.py`'s Gate A docstring and `docs/OPERATIONS.md` ("Identity URL").
+   Gate A's precondition is now stated as: the notice is published at the URL our own traffic
+   points at — not "a project page is live somewhere else".
+
+### Also fixed while doing the above
+
+- **Two placeholders were still sitting in outbound documents.** `docs/IRB_INQUIRY_NOTE.md`
+  ended "Questions: [CONTACT_EMAIL]." and `docs/project_page.md` said the same under "Who
+  runs it" — drafts that would have gone to the board and onto your profile README with the
+  token still in them. Both now carry `jforden@carrollu.edu`, and the notice page prints its
+  own URL so a reader can see it is the page the user agent points at. (`OPERATIONS.md:39`
+  keeps the literal `[PROJECT_URL]`/`[CONTACT_EMAIL]` strings on purpose: that section
+  explains the refusal check, and `tests/test_fetch_rules.py:531-535` asserts it fires.)
+- `src/config.py`'s `MAX_SENDS_PER_DOMAIN` comment said "https primary + http fallback + 1
+  unverified TLS retry", which reads like three requests for one page. Rewritten to say
+  three budget-charged *phases* and that redirect hops are charged to the phase, not the cap.
+- `src/config.py`'s Gate A docstring now states which precondition the code can actually
+  check (a filled-in User-Agent) and which one only you can (the notice being published at
+  `PROJECT_URL`), so nobody reads the docstring as if the second one were enforced.
+- Stale citation in this file: it pointed at `tests/test_fetch_rules.py:1103-1137` for the
+  Gate A tests. That file is 541 lines; the Gate A block is 506-541. The old range came from
+  the interrupted child's version of the file, which I deleted.
+
+### Still needs your decision
 
 1. **Gate A is one key, not two.** `assert_live_allowed()` raises only if
    `LIVE_REQUESTS_ENABLED` is False **and** `PATCHWATCH_GATE_A` is not exactly `APPROVED`.
    So one stray `export PATCHWATCH_GATE_A=APPROVED` in a shell profile opens live traffic,
-   with no code change and no second confirmation. `tests/test_fetch_rules.py:1103-1137`
+   with no code change and no second confirmation. `tests/test_fetch_rules.py:506-541`
    pins this behaviour deliberately, so it is arguably the intended design (the env marker
    *is* the encoding of your approval message). If you want two independent keys, change
    `or` to `and` in `src/fetch.py:93` and update those tests — my recommendation is to do
    that for the first live week.
-2. **The public page's request promise vs the code.** Your brief drafts the page text as
-   "one ordinary homepage request per domain, at most 2 per day during the pilot". The
-   crawler allows three budget-charged phases (https, one unverified retry after a cert
-   error, one plain-HTTP fallback), plus up to three same-domain redirect hops inside a
-   phase. I wrote `docs/project_page.md` to say three, because publishing "at most 2" while
-   the code can do 3 is a promise we break on record. Either tighten
-   `MAX_SENDS_PER_DOMAIN` to 2, or keep 3 on the page. Related: the user agent currently
-   points at `https://github.com/JForden/JForden`, a GitHub profile, not a project page —
-   and Gate A's stated meaning is that the project page is already live.
 
 ## Open
 

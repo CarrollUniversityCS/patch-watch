@@ -11,8 +11,11 @@ sites were already current, and how many updated in the days after the fix.
 
 # What a request from us looks like
 
-One ordinary request for the homepage — the same request any visitor's browser makes.
-We read the address bar equivalent of `https://yourdomain.gov/` and nothing else.
+One ordinary request for the homepage, over HTTPS, with a tool that identifies itself as
+this study. We read the address bar equivalent of `https://yourdomain.gov/` and no other
+path on your site. If HTTPS will not connect to your host at all, we make one plain-HTTP
+attempt so we can tell "no site here" from "site here, refusing HTTPS" — recorded as an
+HTTP attempt either way.
 
 - **We do not look for vulnerable endpoints, and we never send an exploit.** The only
   thing we read is what the server volunteers in its normal response headers.
@@ -22,18 +25,23 @@ We read the address bar equivalent of `https://yourdomain.gov/` and nothing else
   visitor's session or be logged in as anyone.
 - **We read at most the first 64 kilobytes of the homepage**, then discard it. We do not
   store page content, only a short fingerprint of it.
-- **At most three requests per domain per day**, which covers the homepage request, a
-  same-site redirect, and one plain-HTTP fallback if the secure request cannot connect.
-  Never more than one request to the same IP address at a time, at most 20 of our
-  requests running at once overall, with a random pause of 0.1 to 0.5 seconds between
-  them and a hard 20-second timeout.
+- **Usually one request per domain per day, and at most three.** The extra ones only
+  happen when the first told us nothing: one more if your certificate fails verification
+  (a second read, without verification, purely so we can tell "unreachable" apart from
+  "reached but showing no version"), and one more if HTTPS cannot connect at all (a single
+  plain-HTTP try). Three in a day means both of those went wrong. Redirects are counted
+  separately: we follow at most three hops within the same site on each try, so a site that
+  redirects on every try could see up to twelve requests from us in a day — and the twelve
+  only happens on a site that is failing in two ways at once. Never more than one request at a
+  time to the same IP address, at most 20 of our requests running at once overall, with a
+  random pause of 0.1 to 0.5 seconds between them and a hard 20-second timeout.
 - **We identify ourselves.** Every request carries the user agent
-  `CarrollPHPStudy/1.0` with this page's address and a contact email in it, so your
-  security team can see exactly who called and why. We never pretend to be a browser.
+  `CarrollPHPStudy/1.0` with the address of this notice — my GitHub profile README,
+  `https://github.com/JForden/JForden` — and a contact email in it, so your security team
+  can see exactly who called and why. We never pretend to be a browser.
 
-If a site's certificate is broken, we note that fact. In that one case we may read the
-response headers a second time without certificate verification, purely so we can tell
-"unreachable" apart from "reached but hiding its version". A site that returns an error,
+A broken certificate is recorded as such — we never quietly treat it as a normal reading.
+A site that returns an error,
 a rate-limit response (429) or a server error (5xx) is left alone for the rest of the day.
 
 # What we keep
@@ -51,7 +59,7 @@ appear vulnerable.**
 # Who runs it
 
 Jack Forden, Assistant Professor of Computer Science and AI, Carroll University,
-Waukesha, Wisconsin — [CONTACT_EMAIL].
+Waukesha, Wisconsin — jforden@carrollu.edu. Notice page: https://github.com/JForden/JForden
 
 # How to be excluded
 

@@ -41,7 +41,9 @@ Security).
 ## Controls already built into the study
 
 - **Opt-out, honoured within 24 hours**, on a bare email request with no verification,
-  plus a public project page that describes the traffic before it starts.
+  plus a public notice describing the traffic before it starts. The notice is published as
+  the PI's GitHub profile README — the same URL carried in every request's user agent — so
+  an operator who sees the traffic can find the page it points at.
 - **Self-identifying traffic**: a custom user agent naming the project, its URL and a
   contact address, so site operators can see who is measuring them.
 - **A hard stop**: the pipeline halts itself if more than 10% of a rolling window of 50
@@ -58,4 +60,4 @@ Compute and network egress are covered by existing institutional access; the stu
 request volume is on the order of hundreds of homepage requests per day against a sample
 of 319 domains drawn from a frame of 15,614 nonfederal .gov domains.
 
-Questions: [CONTACT_EMAIL].
+Questions: jforden@carrollu.edu.

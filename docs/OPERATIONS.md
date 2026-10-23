@@ -137,13 +137,30 @@ across a cookie-setting response. If you ever swap HTTP libraries, that test is 
 to port first, because the failure mode is silent and breaks a promise made on the public
 page and in the IRB note.
 
-**Wording mismatch to settle before the page goes live.** The brief's public-page text
-promises "at most 2 requests per domain per day"; the code allows 3 phases (primary,
-redirect chain, HTTP fallback), and `docs/project_page.md` says three because the code is
-the truth. Either tighten `MAX_SENDS_PER_DOMAIN` to 2 or keep the page's number at 3 — do
-not publish a promise the crawler exceeds. Same for the user-agent URL: it currently
-points at a GitHub profile, not at this project page, and Gate A's stated meaning is that
-the project page is live.
+**Request-count promise: settled 2026-10-23, owner decision.** The brief's draft page text
+said "at most 2 requests per domain per day". The crawler needs three budget-charged
+phases, so the code keeps `MAX_SENDS_PER_DOMAIN = 3` and the public page states three with
+the reason. Each phase exists to prevent a specific measurement error: `https` (primary),
+`https_unverified` only after a certificate-verification failure that read no headers
+(`src/fetch.py:562`) — otherwise a broken chain looks like an unreachable site — and
+`http_fallback` only when HTTPS produced no response and the failure was not DNS
+(`src/fetch.py:578`) — otherwise an HTTP-only host is recorded as `NO_RESPONSE`, which is
+the worst error this study can make. In practice a domain sees one request; two if either
+condition fires; three only if both do. If you ever tighten the cap to 2, you are choosing
+to call cert-broken or HTTP-only hosts unreachable — then say that on the public page
+instead of publishing a number the crawler exceeds.
+
+One caveat the page must keep: **redirect hops are not budget-charged.** A phase can end in
+up to `MAX_REDIRECTS` same-domain hops, each its own ledger row, so a redirecting site can
+see as many as `3 x (3 + 1) = 12` HTTP requests in a day, which is exactly the ceiling
+`Ledger.violations()` audits against. "At most three requests" means three phases; the page
+says so in plain words.
+
+**Identity URL: your GitHub profile README, not a hosted site.** `PROJECT_URL` is
+`https://github.com/JForden/JForden`, whose profile README is the human-readable notice
+page, and that is the address carried in the user agent. There is no separate project site.
+So Gate A means: *the notice is published at the URL our own traffic points to, and it reads
+like the opt-out page*, not "a project page is live somewhere else".
 
 ## Playbooks
 

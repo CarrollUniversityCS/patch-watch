@@ -4,6 +4,14 @@ number lives here so it can be audited in one place.
 GATE A: nothing in this file authorises live traffic. `LIVE_REQUESTS_ENABLED`
 stays False until the operator (Jack Forden) replies "GATE A APPROVED", and the
 fetcher refuses to run when it is False.
+
+Gate A is a human decision, not a check the code can make: the one condition the
+fetcher can verify is a filled-in User-Agent. Its other precondition — that the
+notice at PROJECT_URL, Jack Forden's GitHub profile README, is actually published
+and reads as an opt-out page — has to be confirmed by the operator. There is no
+separate hosted project page; PROJECT_URL is the address our own traffic carries,
+so an operator who looks us up from a log lands on the notice. See
+docs/OPERATIONS.md, "Identity URL".
 """
 
 from __future__ import annotations
@@ -39,7 +47,10 @@ TOTAL_TIMEOUT_S = 20.0
 MAX_REDIRECTS = 3                       # same registrable domain only
 MAX_BODY_BYTES = 64 * 1024              # read, derive php_hints, discard
 COOKIE_JAR = False                      # never send cookies
-MAX_SENDS_PER_DOMAIN = 3                # rule 2: https primary + http fallback + 1 unverified TLS retry
+MAX_SENDS_PER_DOMAIN = 3                # rule 2: 3 budget-charged PHASES, not raw requests:
+                                        # https | +https_unverified | +http_fallback (see
+                                        # docs/OPERATIONS.md "Request-count promise"). Redirect
+                                        # hops are charged to the phase, not to this cap.
 
 # ---------------------------------------------------------------- kill switch (rule 6)
 KILL_ROLLING_WINDOW = 50

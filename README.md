@@ -33,7 +33,7 @@ backport a fix without changing the version string.
 | `scripts/cron.disabled` | The schedule, deliberately commented out (Stage 4 says install it disabled). |
 | `tests/` | 303 tests, loopback only. `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
 | `data/` | Frame, sample, database, ledger exports — gitignored. See `data/README.md`. |
-| `docs/` | `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out page draft), `IRB_INQUIRY_NOTE.md`. |
+| `docs/` | `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out notice; to be published as the GitHub profile README that `PROJECT_URL` and the user agent point at), `IRB_INQUIRY_NOTE.md`. |
 | `blocklist.txt` | Hard rule 5: domains removed from measurement on request. |
 
 ## Run it
@@ -75,7 +75,7 @@ guessed at in either case.
 ## Hard rules, in one line each
 
 1. **Passive only** — a homepage GET and nothing else; no exploits, probes, fuzzing, port scans, logins, or off-list domains.
-2. **Budget** — one GET, at most 3 redirects and only within the same registrable domain, one HTTP fallback, one unverified retry solely to read headers on a cert error; never cookies; read 64 KB then discard; never store bodies.
+2. **Budget** — three budget-charged *phases* per domain per day, which is normally one request: `https`, then `https_unverified` only after a certificate-verification failure, then `http_fallback` only if HTTPS never responded (a DNS failure excludes it). Each phase may follow at most 3 same-registrable-domain redirects and those hops are not charged against the phase cap, so the hard ceiling a site can see is 3 x 4 = 12 requests in a day; never cookies; read 64 KB then discard; never store bodies.
 3. **Identify yourself** — declared user agent, never a browser impersonation.
 4. **Rate limits** — 20 concurrent overall, 1 per resolved IP, 0.1–0.5 s jitter, 10 s/20 s timeouts, back off on 429/503.
 5. **Opt-out** — load `blocklist.txt` before every run; honour requests within 24 hours.
