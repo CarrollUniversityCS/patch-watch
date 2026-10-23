@@ -150,7 +150,9 @@ analysis 5 switches it off.
 - **Benchmark, `cve_2024_4577`.** 8.3.8 / 8.2.20 / 8.1.29, released 2024-06-06; 8.0 was
   EOL. It is used for RQ5 on archived data only. That CVE was exploitable only on Windows
   PHP-CGI, so this measures **adoption** of a critical release, not exposure.
-  **Re-verify the three versions against php.net's ChangeLog before the freeze.**
+  **Verified 2026-10-23:** the php-src advisory GHSA-3qgc-jrrr-25jv gives patched
+  versions 8.3.8 / 8.2.20 / 8.1.29, and php.net's 2024 archive dates all three
+  06 Jun 2024.
 
 ## 6. Schedule and traffic
 
@@ -293,13 +295,16 @@ those dates. No causal claim is made from them.
    one-paragraph update describing the Wisconsin design, which differs from what they were
    told (that file has the table). Any notification experiment or staff survey needs its
    own application first.
-2. `docs/project_page.md`: updated for Wisconsin scope, with the opt-out address
-   (jforden@carrollu.edu) at the top. **Publish it as the README at `PROJECT_URL`.**
-   Also inform Carroll IT, as the PI told the IRB he would.
+2. **Notice: published 2026-10-23** as the top section of the profile README at
+   `PROJECT_URL` (JForden/JForden commit `6e9a5ae`), with the opt-out address
+   (jforden@carrollu.edu) first. Source of truth: `docs/project_page.md`. Re-publish
+   whenever that file changes. **Still to do:** inform Carroll IT, as the PI told the IRB
+   he would.
 3. `scripts/cron.disabled`: updated to the §6 schedule, still commented out.
 4. **Open.** Commit the mission brief (the hard-rule text this repo enforces) under
    `docs/`. It is cited throughout the code and is still not in the repo.
-5. Re-verify the CVE-2024-4577 versions (§5.2). Freeze this plan. Then open Gate A.
+5. ~~Re-verify the CVE-2024-4577 versions~~ (done 2026-10-23, §5.2). Freeze this
+   plan. Then open Gate A.
 
 ## 10. Threats to validity, stated for the paper
 

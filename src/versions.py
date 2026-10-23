@@ -170,7 +170,9 @@ PHP2SHELL = PatchEvent(
 # argument injection) was exploitable only on Windows PHP-CGI in some locales, so
 # this event measures how fast the population ADOPTS a critical security release,
 # not how exposed it was. Fixed 2024-06-06 in 8.3.8 / 8.2.20 / 8.1.29; 8.0 was
-# already EOL. Verify against php.net/ChangeLog-8.php before the plan is frozen.
+# already EOL. VERIFIED 2026-10-23: php-src advisory GHSA-3qgc-jrrr-25jv lists
+# affected < 8.3.8 / < 8.2.20 / < 8.1.29 with exactly those patched versions, and
+# the php.net 2024 news archive dates all three security releases 06 Jun 2024.
 CVE_2024_4577 = PatchEvent(
     key="cve_2024_4577",
     title="CVE-2024-4577 (PHP-CGI argument injection), adoption benchmark",
@@ -178,7 +180,8 @@ CVE_2024_4577 = PatchEvent(
     fixed_releases={(8, 1): (8, 1, 29), (8, 2): (8, 2, 20), (8, 3): (8, 3, 8)},
     eol_ceiling=(8, 0),
     note="Adoption benchmark only; exposure required Windows PHP-CGI.",
-    sources=("https://www.php.net/ChangeLog-8.php",),
+    sources=("https://github.com/php/php-src/security/advisories/GHSA-3qgc-jrrr-25jv",
+             "https://www.php.net/archive/2024.php"),
 )
 
 # Pre-committed second threshold (docs/analysis_plan.md §5.2). php.net 2026-10-23:

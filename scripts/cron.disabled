@@ -6,7 +6,7 @@
 #      LIVE_REQUESTS_ENABLED flag in src/config.py AND PATCHWATCH_GATE_A=APPROVED in the
 #      environment. The message is the authorisation; see docs/OPERATIONS.md.
 #   2. The notice (docs/project_page.md) published as the README at PROJECT_URL, with the
-#      opt-out address jforden@carrollu.edu.
+#      opt-out address jforden@carrollu.edu: DONE 2026-10-23 (JForden/JForden 6e9a5ae).
 #   3. The IRB determination: RECEIVED 2026-10-23, not human-subjects research
 #      (docs/IRB_DETERMINATION.md). Carroll IT informed.
 #   4. docs/analysis_plan.md frozen (title commit "analysis plan v1.0 (frozen)").
