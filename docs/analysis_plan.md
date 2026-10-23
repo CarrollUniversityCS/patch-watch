@@ -325,8 +325,8 @@ those dates. No causal claim is made from them.
 2. **Notice: published 2026-10-23** as the top section of the profile README at
    `PROJECT_URL` (JForden/JForden commit `6e9a5ae`), with the opt-out address
    (jforden@carrollu.edu) first. Source of truth: `docs/project_page.md`. Re-publish
-   whenever that file changes. **Still to do:** inform Carroll IT, as the PI told the IRB
-   he would.
+   whenever that file changes. Telling Carroll IT is an informal courtesy, not a
+   precondition (§12, 2026-10-23).
 3. `scripts/cron.disabled`: updated to the §6 schedule, still commented out.
 4. **Open.** Commit the mission brief (the hard-rule text this repo enforces) under
    `docs/`. It is cited throughout the code and is still not in the repo.
@@ -367,3 +367,4 @@ those dates. No causal claim is made from them.
 | Date | Change | Data seen at the time? | Reason |
 |---|---|---|---|
 | 2026-10-23 | **Frozen as v1.0.** Pre-freeze drafts v0.1 and v0.2 were written the same day. The freeze added §7.0 (primary endpoint and contingency rule) and turned D2–D5 into decisions. | **No.** No live or archived data had been collected. | Pre-registration before collection. |
+| 2026-10-23 | §9 governance only: telling Carroll IT is no longer a Gate A precondition; the PI handles it informally. No effect on any measurement, class, cohort or table. | No. | PI decision. |

@@ -59,7 +59,7 @@ matches what runs. That costs one email, and it keeps a later reader from findin
 
 ## Effect on Gate A
 
-The third precondition in `scripts/cron.disabled` ("IRB/IT determination received") is
-met for the IRB part. Gate A itself is still closed. It opens only when the PI says
-"GATE A APPROVED", after the notice page is live at `PROJECT_URL`, the plan is frozen,
-and Carroll IT has been informed.
+The IRB precondition in `scripts/cron.disabled` is met. Gate A itself is still closed.
+It opens only when the PI says "GATE A APPROVED", after the notice page is live at
+`PROJECT_URL` and the plan is frozen (both done 2026-10-23). Telling Carroll IT is a
+courtesy the PI handles informally, not a precondition (PI decision, 2026-10-23).
