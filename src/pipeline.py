@@ -49,14 +49,29 @@ def new_run_id(snapshot_label: str = "", *, when: datetime | None = None) -> str
     return f"R{ts:%Y%m%dT%H%M%SZ}_{label}"
 
 
+def excluded_by_scope(row: dict[str, str]) -> bool:
+    """True for rows the study never measures (config.EXCLUDED_DOMAIN_TYPE_PREFIXES).
+
+    Checked on domain_type and on stratum, so a sample that only carries one of the
+    two (the national pilot sample has both) is still filtered. A sample with
+    neither column cannot be checked and is refused by preflight instead.
+    """
+    for key in ("domain_type", "stratum"):
+        val = (row.get(key) or "").strip()
+        if any(val.startswith(p) for p in config.EXCLUDED_DOMAIN_TYPE_PREFIXES):
+            return True
+    return False
+
+
 def load_sample(path: Path | str) -> list[dict[str, str]]:
-    """Read a sample CSV. Keeps first occurrence of a domain, lower-cases it."""
+    """Read a sample CSV. Keeps first occurrence of a domain, lower-cases it, and
+    drops out-of-scope rows (tribal nations, see config) before anything else."""
     rows: list[dict[str, str]] = []
     seen: set[str] = set()
     with open(path, newline="", encoding="utf-8") as fh:
         for raw in csv.DictReader(fh):
             dom = (raw.get("domain") or "").strip().lower().rstrip(".")
-            if not dom or dom in seen:
+            if not dom or dom in seen or excluded_by_scope(raw):
                 continue
             seen.add(dom)
             rows.append({**{k: (v or "") for k, v in raw.items()}, "domain": dom})
@@ -73,6 +88,9 @@ def preflight(*, sample_rows: list[dict[str, str]], blocklist: set[str],
 
     if not sample_rows:
         problems.append("sample is empty")
+    elif not any(r.get("domain_type") or r.get("stratum") for r in sample_rows):
+        problems.append("sample has no domain_type/stratum column, so the tribal-nation "
+                        "exclusion cannot be checked (config.EXCLUDED_DOMAIN_TYPE_PREFIXES)")
 
     # Hard rule 5: an explicit opt-out list must exist and be non-trivial. A
     # missing file is not "nobody opted out", it is "nobody maintained the list",

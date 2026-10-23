@@ -42,6 +42,8 @@ EVENT_TYPES = (
 
 # The class names have exactly one source of truth: classify.CLASSES.
 NO_RESPONSE = classify.CLASSES[0]
+NOT_MEASURED = "NOT_MEASURED"
+assert NOT_MEASURED in classify.CLASSES
 
 _Visible = tuple[int, int, int]
 
@@ -187,7 +189,9 @@ def events_between(prev: "RowLike", cur: "RowLike",
         out.append(_event(cur, "class_change", prev,
                           {"note": "one class changed between snapshots"}))
 
-    responded = cur_cls != NO_RESPONSE
+    # NOT_MEASURED (not asked, refused, 5xx) carries no headers worth reading, so a
+    # version vanishing there is no more a "disappearance" than a timeout is.
+    responded = cur_cls not in (NO_RESPONSE, NOT_MEASURED)
     if pv is not None and cv is None and responded:
         out.append(_event(cur, "header_disappeared", prev,
                           {"note": "version string no longer visible; may be a patch, a "

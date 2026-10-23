@@ -15,12 +15,25 @@ Design rules (read before changing anything):
 * Ambiguous input is classified and logged, never guessed at (brief rule 9).
 
 Class precedence, first match wins:
-  1 NO_RESPONSE          connection/timeout/non-HTTP failure
+  0 NOT_MEASURED         we chose not to ask (blocklist, kill switch, budget) --
+                         never a finding about the site
+  1 NO_RESPONSE          no HTTP response at all (connect/DNS/timeout/TLS)
   2 <version parsed>     PATCHED_UPSTREAM | POSSIBLY_BACKPORTED |
                          EOL_UNFIXED | VULNERABLE_BY_VERSION
-  3 UNPARSEABLE          a version-shaped token exists but will not parse
+  3 UNPARSEABLE          a version-shaped token exists but cannot be ranked
   4 PHP_VERSION_HIDDEN   PHP evidence, no version anywhere
-  5 NO_PHP_EVIDENCE      responded, nothing indicates PHP
+  5 NOT_MEASURED         the site refused us (401/403/429) or errored (5xx) and
+                         showed no PHP evidence: we learned nothing, and the
+                         public notice promises such sites are "not measured"
+  6 NO_PHP_EVIDENCE      a real answer with nothing indicating PHP
+
+A response that arrived with a transport-level note attached (redirect limit,
+redirect without Location, a TLS chain we had to read unverified, a timeout on
+a LATER redirect hop) is still a response: it is classified from the headers it
+carried and the note is kept in `detail` (audit findings C1, C2).
+
+`classify(obs, event=...)` takes a versions.PatchEvent so archived headers can be
+read against a historical release; the default is PHP2Shell.
 """
 
 from __future__ import annotations
@@ -30,11 +43,9 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from versions import (
-    FIXED_RELEASES,
     SUFFIX_DISTRO_FAMILIES,
-    fixed_for_branch,
-    is_eol_branch,
-    is_newer_branch,
+    PatchEvent,
+    get_event,
 )
 
 CLASSES: tuple[str, ...] = (
@@ -46,7 +57,13 @@ CLASSES: tuple[str, ...] = (
     "EOL_UNFIXED",
     "POSSIBLY_BACKPORTED",
     "UNPARSEABLE",
+    "NOT_MEASURED",          # appended last: callers index the tuple by position
 )
+
+# error_type values that mean the study did not ask. Not a property of the site.
+NOT_ASKED_ERRORS = frozenset({"skipped_blocklist", "halted", "budget_exhausted"})
+# Statuses that, with no PHP evidence, say "refused or broken", not "no PHP here".
+REFUSAL_STATUSES = frozenset({401, 403, 429})
 
 # Class order used for reporting, most-severe-unknown first.
 CLASS_ORDER: tuple[str, ...] = (
@@ -58,10 +75,14 @@ CLASS_ORDER: tuple[str, ...] = (
     "NO_PHP_EVIDENCE",
     "UNPARSEABLE",
     "NO_RESPONSE",
+    "NOT_MEASURED",
 )
 
-# `PHP/<ver>` or `PHP <ver>` inside an X-Powered-By or Server header value.
-_PHP_TOKEN_RE = re.compile(r"php[\s/]*v?([^\s;,)\]]*)", re.IGNORECASE)
+# `PHP/<ver>` or `PHP <ver>` inside an X-Powered-By or Server header value. The
+# separator is captured so a product NAME that merely starts with "php" (PHP-FPM,
+# phpBB) is read as PHP evidence, not as an unparseable version (audit C6).
+_PHP_TOKEN_RE = re.compile(r"\bphp(?P<sep>[\s/]*)v?(?P<tok>[^\s;,)\]]*)", re.IGNORECASE)
+_PRERELEASE_RE = re.compile(r"^-?(alpha|beta|rc|dev)(\d*)", re.IGNORECASE)
 _VERSION_RE = re.compile(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?(.*)$", re.DOTALL)
 # Something that looks like a package release suffix rather than a bare version.
 _SUFFIX_RE = re.compile(r"^[-+~.]")
@@ -103,14 +124,19 @@ def parse_php_token(token: str, source: str) -> VersionRead | None:
         # "PHP/8" or "PHP/x" garbage; a bare major is not a version we can rank.
         return VersionRead(raw=token, version=None, suffix="", source=source, parsed=False,
                            note=f"only a major version present ({token!r}); cannot rank a branch")
+    if patch is None:
+        # "PHP/8.3" names a branch, not a release. Treating it as 8.3.0 would call it
+        # vulnerable by guesswork (hard rule 9; audit C4).
+        return VersionRead(raw=token, version=None, suffix=rest, source=source,
+                           partial=True, parsed=False,
+                           note=f"patch number absent ({token!r}); cannot rank against a fixed release")
     return VersionRead(
         raw=token,
         version=_tup(major, minor, patch),
         suffix=rest,
         source=source,
-        partial=(patch is None),
+        partial=False,
         parsed=True,
-        note=("patch number absent, treated as .0" if patch is None else ""),
     )
 
 
@@ -174,7 +200,10 @@ def _read_versions(headers: dict[str, list[str]] | None) -> tuple[list[VersionRe
     for source, hdr in (("x-powered-by", "x-powered-by"), ("server", "server")):
         for value in _header_values(headers, hdr):
             for m in _PHP_TOKEN_RE.finditer(value):
-                read = parse_php_token(m.group(1), source)
+                tok = m.group("tok")
+                if not m.group("sep") and tok and not tok[0].isdigit():
+                    continue                    # "PHP-FPM", "phpBB": a name, not a version slot
+                read = parse_php_token(tok, source)
                 if read is None:
                     continue                    # PHP mentioned, no version slot -> evidence only
                 (parsed if read.parsed else unparsed).append(read)
@@ -234,25 +263,46 @@ def _php_evidence(headers: dict[str, list[str]] | None, php_hints: dict[str, Any
     return (bool(ev), tuple(ev))
 
 
-def classify(obs: dict[str, Any]) -> Verdict:
+def _prerelease(read: VersionRead) -> tuple[str, int] | None:
+    m = _PRERELEASE_RE.match(read.suffix or "")
+    if not m:
+        return None
+    return m.group(1).upper(), int(m.group(2) or 0)
+
+
+def classify(obs: dict[str, Any], event: PatchEvent | str | None = None) -> Verdict:
     """Assign exactly one class to one observation record.
 
     Expected keys: status_code, error_type, headers (dict[str, list[str]],
-    lower-cased keys), php_hints (dict), redirect_off_domain, cert_error.
+    lower-cased keys), php_hints (dict), redirect_off_domain, cert_error,
+    and optionally skipped_reason.
     """
-    error_type = obs.get("error_type")
+    ev = event if isinstance(event, PatchEvent) else get_event(event)
+    error_type = obs.get("error_type") or None
+    if error_type == "ok":
+        error_type = None
     status = obs.get("status_code")
     headers = obs.get("headers") or {}
 
-    # ---- 1. NO_RESPONSE: never reached the HTTP layer, or timed out.
-    if error_type and error_type not in ("ok", ""):
-        return Verdict("NO_RESPONSE", f"request failed before a usable HTTP response: {error_type}",
-                       detail={"error_type": error_type})
+    # ---- 0. We did not ask. Says nothing about the site; out of every denominator.
+    if error_type in NOT_ASKED_ERRORS or obs.get("skipped_reason"):
+        return Verdict("NOT_MEASURED", f"not requested: {error_type or obs.get('skipped_reason')}",
+                       detail={"not_measured": "not_requested", "error_type": error_type})
+
+    # ---- 1. NO_RESPONSE: nothing came back over HTTP at all.
     if status is None:
-        return Verdict("NO_RESPONSE", "no status code recorded", detail={"error_type": "no_status"})
+        return Verdict("NO_RESPONSE",
+                       f"request failed before a usable HTTP response: {error_type or 'no_status'}",
+                       detail={"error_type": error_type or "no_status"})
 
     has_ev, evidence = _php_evidence(headers, obs.get("php_hints"))
     parsed, unparsed = _read_versions(headers)
+    # A response with a transport note (C1/C2) is still a response; keep the note.
+    transport: dict[str, Any] = {}
+    if error_type:
+        transport["transport_note"] = error_type
+    if obs.get("cert_error"):
+        transport["cert_error"] = True
 
     # ---- 2. A version we can rank.
     if parsed:
@@ -264,7 +314,7 @@ def classify(obs: dict[str, Any]) -> Verdict:
         conflict = any(o.version != chosen.version for o in others)
 
         branch = chosen.branch
-        fixed = fixed_for_branch(branch) if branch else None
+        fixed = ev.fixed_for_branch(branch) if branch else None
         server_comment = " ".join(_header_values(headers, "server"))
         family, family_src = distro_family_source(chosen, server_comment=server_comment)
         base = dict(
@@ -278,20 +328,30 @@ def classify(obs: dict[str, Any]) -> Verdict:
             evidence=evidence or ("parsed_version",),
             header_conflict=conflict,
         )
-        detail: dict[str, Any] = {"chosen_raw": chosen.raw, "partial": chosen.partial, "note": chosen.note}
+        detail: dict[str, Any] = {"chosen_raw": chosen.raw, "partial": chosen.partial,
+                                  "note": chosen.note, "event": ev.key, **transport}
         if family_src:
             detail["distro_evidence"] = family_src
         if others:
             detail["other_reads"] = [f"{o.source}:{o.raw}" for o in others]
         if conflict:
             detail["conflict"] = True
-        if chosen.partial:
-            detail["partial_version"] = True
 
-        if is_newer_branch(branch):
+        if ev.is_newer_branch(branch):
+            pre = _prerelease(chosen)
+            if pre is not None:
+                need = ev.prerelease_fixed.get(branch)
+                if not (need and pre[0] == need[0] and pre[1] >= need[1]):
+                    return Verdict("UNPARSEABLE",
+                                   f"pre-release {chosen.raw!r} of branch {'.'.join(map(str, branch))}: "
+                                   f"no evidence this build carries the fix",
+                                   version_string=chosen.raw, version_source=chosen.source,
+                                   php_evidence=True, evidence=base["evidence"],
+                                   detail={**detail, "prerelease": True})
+            newest = ".".join(map(str, ev.newest_supported))
             return Verdict("PATCHED_UPSTREAM",
                            f"branch {'.'.join(map(str, branch))} is newer than the newest branch with a "
-                           f"known-vulnerable release (8.5); no vulnerable release of this branch exists",
+                           f"known-vulnerable release ({newest}); no vulnerable release of this branch exists",
                            fixed_version=None, at_or_above_fixed=True, **{**base, "detail": detail})
         if fixed is None:
             # <= 8.1: no official fixed release exists for this branch.
@@ -300,8 +360,9 @@ def classify(obs: dict[str, Any]) -> Verdict:
                                f"EOL branch {'.'.join(map(str, branch))} with a distro package suffix "
                                f"({chosen.suffix!r} -> {family}); vendor may have backported, PHP project will not release",
                                at_or_above_fixed=None, **{**base, "detail": {**detail, "eol_branch": True}})
+            ceiling = ".".join(map(str, ev.eol_ceiling))
             return Verdict("EOL_UNFIXED",
-                           f"branch {'.'.join(map(str, branch))} is at or below 8.1: no official fixed "
+                           f"branch {'.'.join(map(str, branch))} is at or below {ceiling}: no official fixed "
                            f"release from the PHP project (source-backport branches exist for 7.4-8.1, so a "
                            f"from-source patch here is invisible to header inspection)",
                            at_or_above_fixed=None, **{**base, "detail": detail})
@@ -332,7 +393,8 @@ def classify(obs: dict[str, Any]) -> Verdict:
                        f"PHP version slot present but unparseable: {bad.raw!r} ({bad.note})",
                        version_string=bad.raw, version_source=bad.source,
                        php_evidence=True, evidence=evidence or ("unparseable_version_slot",),
-                       detail={"raw": bad.raw, "all_unparsed": [u.raw for u in unparsed]})
+                       detail={"raw": bad.raw, "all_unparsed": [u.raw for u in unparsed],
+                               "note": bad.note, "event": ev.key, **transport})
 
     # ---- 4. PHP is there, the version is not.
     if has_ev:
@@ -341,12 +403,19 @@ def classify(obs: dict[str, Any]) -> Verdict:
                        "(expose_php=Off, header stripped by a proxy, or PHP-FPM behind a "
                        "server that does not advertise it); absence of a version is NOT evidence of safety",
                        php_evidence=True, evidence=evidence,
-                       detail={"cert_error": bool(obs.get("cert_error"))})
+                       detail={"cert_error": bool(obs.get("cert_error")), **transport})
 
-    # ---- 5. Answered, nothing about PHP.
+    # ---- 5. Refused or broken, and nothing about PHP: we learned nothing (C3).
+    if status in REFUSAL_STATUSES or status >= 500:
+        why = "refused" if status in REFUSAL_STATUSES else "server_error"
+        return Verdict("NOT_MEASURED",
+                       f"HTTP {status} with no PHP indicator: {why}, not evidence that PHP is absent",
+                       detail={"not_measured": why, "status_code": status, **transport})
+
+    # ---- 6. Answered, nothing about PHP.
     return Verdict("NO_PHP_EVIDENCE",
                    f"HTTP {status} response with no PHP indicator in headers or body hints",
-                   php_evidence=False, detail={"status_code": status})
+                   php_evidence=False, detail={"status_code": status, **transport})
 
 
 def class_counts(verdicts: Iterable[Verdict]) -> dict[str, int]:

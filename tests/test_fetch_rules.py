@@ -548,3 +548,81 @@ def test_gate_a_mock_mode_bypasses_the_gate_by_design(monkeypatch):
     monkeypatch.delenv(config.GATE_MARKER_ENV, raising=False)
     monkeypatch.setattr(config, "LIVE_REQUESTS_ENABLED", False)
     fetch.assert_live_allowed(allow_loopback_only=True)
+
+
+# ================================================================ audit 2026-10-23 fixes
+def test_c1_cert_failure_retry_is_classified_from_the_headers_it_read(mock_stack):
+    """The unverified retry read `PHP/8.3.35`; that reading must reach the classifier.
+
+    Before the fix the phase-1 `cert_error` survived the successful retry and the site
+    was filed as NO_RESPONSE - every broken-chain site silently vanished from the data.
+    """
+    import classify
+    import pipeline
+    obs = fetch_one(deck_crawler(mock_stack, "vuln8335", base=mock_stack.https_base))
+    assert obs.cert_error is True and obs.status_code == 200
+    assert obs.error_type is None
+    v = classify.classify(pipeline.classify_input(obs))
+    assert v.cls == "VULNERABLE_BY_VERSION", v.reason
+    assert v.detail.get("cert_error") is True, "the broken chain is still on the record"
+
+
+def test_c2_redirect_loop_is_classified_as_a_response(mock_stack):
+    import classify
+    import pipeline
+    obs = fetch_one(deck_crawler(mock_stack, "redirect_loop"))
+    assert obs.error_type == "redirect_limit" and obs.status_code == 302
+    v = classify.classify(pipeline.classify_input(obs))
+    assert v.cls != "NO_RESPONSE", "the site answered four times; it is not unreachable"
+    assert v.detail.get("transport_note") == "redirect_limit"
+
+
+def test_c3_blocklisted_domain_is_not_measured(mock_stack):
+    import classify
+    import pipeline
+    crawler = deck_crawler(mock_stack, "vuln8335", blocklist={"probe.gov"})
+    obs = fetch_one(crawler)
+    v = classify.classify(pipeline.classify_input(obs))
+    assert v.cls == "NOT_MEASURED", "an opt-out must never be counted as an unreachable site"
+
+
+def test_c5_abuse_flag_dropped_after_start_stops_the_remaining_domains(mock_stack, tmp_path):
+    """The flag is checked before every domain, not only at preflight."""
+    flag = tmp_path / "abuse.flag"
+    ks = fetch.KillSwitch(abuse_flag=flag)
+    ks.check_external()                         # what preflight sees: nothing
+    assert ks.tripped is False
+    flag.write_text("ABUSE_COMPLAINT stop now", encoding="utf-8")   # operator, mid-run
+    led = fetch.Ledger()
+    crawler = deck_crawler(mock_stack, "vuln8335", domains=["a.gov", "b.gov", "c.gov"],
+                           kill_switch=ks, ledger=led)
+    out = crawler_loop(crawler, ["a.gov", "b.gov", "c.gov"])
+    assert all(o.error_type == "halted" for o in out)
+    assert led.rows == [], "nothing goes on the wire once the flag is down"
+
+
+def test_scope_tribal_rows_never_load(tmp_path):
+    import pipeline
+    p = tmp_path / "sample.csv"
+    p.write_text("domain,stratum,domain_type\n"
+                 "a.gov,City,City\n"
+                 "nation.gov,Tribal,Tribal\n"
+                 "vote-nation.gov,Election office,Tribal - Election\n", encoding="utf-8")
+    rows = pipeline.load_sample(p)
+    assert [r["domain"] for r in rows] == ["a.gov"]
+
+
+def test_scope_sample_without_type_columns_is_refused(tmp_path):
+    import pipeline
+    probs = pipeline.preflight(sample_rows=[{"domain": "a.gov"}], blocklist={"x.gov"},
+                               blocklist_path=tmp_path / "bl.txt", db_path=tmp_path / "x.db",
+                               mock=True)
+    assert any("tribal-nation exclusion" in p for p in probs)
+
+
+def test_rule5_local_blocklist_is_read_too(tmp_path):
+    """blocklist.txt tells operators to record real opt-outs in blocklist.local.txt."""
+    (tmp_path / "blocklist.txt").write_text("# categories\ncisa.gov\n", encoding="utf-8")
+    (tmp_path / "blocklist.local.txt").write_text("optedout.gov  # 2026-10-23 email\n",
+                                                 encoding="utf-8")
+    assert fetch.load_blocklist(tmp_path / "blocklist.txt") == {"cisa.gov", "optedout.gov"}

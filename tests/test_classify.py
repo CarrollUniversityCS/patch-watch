@@ -111,8 +111,11 @@ EXPECTED: dict[str, dict] = {
                    reason_has=["no PHP indicator"]),
     "iis_nophp": dict(cls="NO_PHP_EVIDENCE", reason_has=["no PHP indicator"]),
     "no_content": dict(cls="NO_PHP_EVIDENCE", reason_has=["HTTP 204"]),
-    "status_503": dict(cls="NO_PHP_EVIDENCE", reason_has=["HTTP 503"]),
-    "status_403": dict(cls="NO_PHP_EVIDENCE", reason_has=["HTTP 403"]),
+    # ---- refused / broken with no PHP evidence: we learned nothing (audit C3)
+    "status_503": dict(cls="NOT_MEASURED", reason_has=["HTTP 503", "server_error"],
+                       detail_has={"not_measured": "server_error"}),
+    "status_403": dict(cls="NOT_MEASURED", reason_has=["HTTP 403", "refused"],
+                       detail_has={"not_measured": "refused"}),
     # ---- conflicting header reads (classifier prefers X-Powered-By)
     "conflict_headers": dict(cls="PATCHED_UPSTREAM", version=(8, 3, 36),
                              version_source="x-powered-by", header_conflict=True,
@@ -270,14 +273,50 @@ def test_aspnet_powered_by_is_no_php():
 def test_missing_status_is_no_response():
     v = classify(_obs(xpb="PHP/8.3.35", status=None))
     assert v.cls == "NO_RESPONSE"
-    assert "no status code" in v.reason
+    assert "no_status" in v.reason
 
 
 @pytest.mark.parametrize("err", ["timeout", "connect_refused", "dns_error", "read_error"])
-def test_error_types_are_no_response(err):
-    v = classify(_obs(xpb="PHP/8.3.35", error_type=err))
+def test_error_types_without_a_response_are_no_response(err):
+    v = classify(_obs(xpb="PHP/8.3.35", error_type=err, status=None))
     assert v.cls == "NO_RESPONSE"
     assert err in v.reason
+
+
+@pytest.mark.parametrize("err", ["redirect_limit", "redirect_no_location", "cert_error", "timeout"])
+def test_a_response_with_a_transport_note_is_still_classified(err):
+    """Audit C1/C2: headers that arrived are evidence, whatever happened next."""
+    v = classify(_obs(xpb="PHP/8.3.35", error_type=err, status=302))
+    assert v.cls == "VULNERABLE_BY_VERSION"
+    assert v.detail["transport_note"] == err
+
+
+@pytest.mark.parametrize("err", ["skipped_blocklist", "halted", "budget_exhausted"])
+def test_not_asked_is_not_measured_never_no_response(err):
+    """Audit C3: an opt-out is not an unreachable site, and must not be counted as one."""
+    v = classify(_obs(xpb="PHP/8.3.35", error_type=err, status=None))
+    assert v.cls == "NOT_MEASURED"
+    assert v.detail["not_measured"] == "not_requested"
+
+
+def test_skipped_reason_alone_is_not_measured():
+    v = classify(_obs(status=None, skipped_reason="blocklisted"))
+    assert v.cls == "NOT_MEASURED"
+
+
+@pytest.mark.parametrize("status", [401, 403, 429, 500, 502, 503])
+def test_refusal_without_php_evidence_is_not_measured(status):
+    v = classify(_obs(server="cloudflare", status=status))
+    assert v.cls == "NOT_MEASURED"
+
+
+def test_refusal_that_still_shows_a_version_is_classified_by_it():
+    """A 403 page from PHP that names its version still told us the version."""
+    assert classify(_obs(xpb="PHP/8.3.35", status=403)).cls == "VULNERABLE_BY_VERSION"
+
+
+def test_plain_404_with_no_php_is_still_no_php_evidence():
+    assert classify(_obs(server="nginx", status=404)).cls == "NO_PHP_EVIDENCE"
 
 
 def test_error_type_ok_is_not_no_response():
@@ -331,11 +370,46 @@ def test_server_header_alone_can_carry_the_version():
     assert v.cls == "PATCHED_UPSTREAM" and v.version_source == "server"
 
 
-def test_partial_version_treated_as_dot_zero():
+def test_partial_version_is_unparseable_not_a_guess():
+    """Audit C4 / hard rule 9: 'PHP/8.3' names a branch, not a release."""
     v = classify(_obs(xpb="PHP/8.3"))
-    assert v.cls == "VULNERABLE_BY_VERSION" and v.version == (8, 3, 0)
-    assert v.detail["partial_version"] is True
-    assert "patch number absent" in v.detail["note"]
+    assert v.cls == "UNPARSEABLE" and v.version is None
+    assert "patch number absent" in v.reason
+
+
+@pytest.mark.parametrize("value", ["PHP-FPM", "phpBB", "PHP/FPM-ish"])
+def test_php_product_names_are_evidence_not_versions(value):
+    """Audit C6: 'PHP-FPM' is a name. Only a '/' or space-separated slot is a version."""
+    v = classify(_obs(xpb=value))
+    expected = "UNPARSEABLE" if "/" in value else "PHP_VERSION_HIDDEN"
+    assert v.cls == expected, v.reason
+
+
+@pytest.mark.parametrize("ver,cls", [
+    ("8.6.0RC1", "UNPARSEABLE"),        # predates the fix
+    ("8.6.0RC3", "UNPARSEABLE"),
+    ("8.6.0-dev", "UNPARSEABLE"),
+    ("8.6.0RC4", "PATCHED_UPSTREAM"),   # php.net: RC4 carries the fixes
+    ("8.6.0RC5", "PATCHED_UPSTREAM"),
+    ("8.6.0", "PATCHED_UPSTREAM"),
+])
+def test_newer_branch_prereleases(ver, cls):
+    assert classify(_obs(xpb=f"PHP/{ver}")).cls == cls
+
+
+def test_historical_event_uses_its_own_thresholds():
+    import versions
+    ev = versions.CVE_2024_4577
+    assert classify(_obs(xpb="PHP/8.3.8"), event=ev).cls == "PATCHED_UPSTREAM"
+    assert classify(_obs(xpb="PHP/8.3.7"), event=ev).cls == "VULNERABLE_BY_VERSION"
+    assert classify(_obs(xpb="PHP/8.1.28"), event=ev).cls == "VULNERABLE_BY_VERSION"
+    assert classify(_obs(xpb="PHP/8.0.30"), event=ev).cls == "EOL_UNFIXED"
+    assert classify(_obs(xpb="PHP/8.4.1"), event=ev).cls == "PATCHED_UPSTREAM"   # newer branch
+
+
+def test_unpublished_event_refuses_to_classify():
+    with pytest.raises(ValueError):
+        classify(_obs(xpb="PHP/8.3.36"), event="cve_2026_115560")
 
 
 def test_space_separated_php_token_parses():

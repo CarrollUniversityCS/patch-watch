@@ -26,9 +26,18 @@ RESEARCHER = "Jack Forden, Carroll University (Waukesha, WI)"
 
 # ---------------------------------------------------------------- gates
 # Hard rule 8 (human gate). The fetcher raises unless this is True AND the
-# marker file exists AND the UA placeholders are filled in.
+# PATCHWATCH_GATE_A environment variable is APPROVED AND the UA placeholders are
+# filled in.
 LIVE_REQUESTS_ENABLED = False
 GATE_MARKER_ENV = "PATCHWATCH_GATE_A"   # must contain exactly "APPROVED" at run time
+
+# ---------------------------------------------------------------- scope
+# PI decision 2026-10-23 (docs/analysis_plan.md §11, D1): tribal nations' domains are
+# not measured, in any frame or sample. Sovereign governments warrant consultation,
+# not just cell suppression, and with nine Wisconsin nations any tribal cell would
+# identify one. pipeline.load_sample() drops these rows before anything else runs,
+# so no sample file, old or new, can put a tribal domain on the wire.
+EXCLUDED_DOMAIN_TYPE_PREFIXES = ("Tribal",)
 
 # ---------------------------------------------------------------- frame (Stage 1)
 CISA_REGISTRY_URL = "https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"

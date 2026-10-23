@@ -17,9 +17,11 @@ in a comment:
   rule 4  rate limits          20 workers, 1 in flight per resolved IP, 100-500 ms
                                jitter, 10 s connect / 20 s total, no retry on 429/503
   rule 5  opt-out              blocklist re-read at run start, skipped domains recorded
-  rule 6  kill switch          rolling window of 50, trips above 10% 403/429/5xx,
-                               or if logs/abuse.flag appears, or if the ledger
-                               audit finds a budget violation
+  rule 6  kill switch          rolling window of 50 phase outcomes (redirect hops
+                               are not separate entries), trips above 10%
+                               403/429/5xx; or if logs/abuse.flag appears (re-read
+                               before every domain); or if the ledger audit finds a
+                               budget violation
   rule 8  human gate           refuses to run unless GATE A is marked APPROVED and
                                the User-Agent carries no [PLACEHOLDER]
 
@@ -132,15 +134,23 @@ def _is_ip_literal(host: str) -> bool:
 
 
 def load_blocklist(path: Path | None = None) -> set[str]:
-    """Hard rule 5. One domain per line; # comments and blanks ignored."""
+    """Hard rule 5. One domain per line; # comments and blanks ignored.
+
+    Also reads the sibling `<name>.local.txt` (e.g. blocklist.local.txt). That is
+    where blocklist.txt itself tells operators to put real opt-outs, because the list
+    of who opted out is a disclosure and the local file is gitignored. Before
+    2026-10-23 that file was never read, so an opt-out recorded exactly as instructed
+    was silently ignored.
+    """
     p = Path(path or config.BLOCKLIST_PATH)
     out: set[str] = set()
-    if not p.exists():
-        return out
-    for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
-        d = line.split("#", 1)[0].strip().lower().rstrip(".")
-        if d:
-            out.add(d)
+    for f in (p, p.with_name(p.stem + ".local" + p.suffix)):
+        if not f.exists():
+            continue
+        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+            d = line.split("#", 1)[0].strip().lower().rstrip(".")
+            if d:
+                out.add(d)
     return out
 
 
@@ -530,12 +540,17 @@ class Crawler:
             obs.skipped_reason = "blocklisted"
             obs.error_type = "skipped_blocklist"
             return obs
+        # Rule 6, second trigger, re-read per domain: an operator who drops the abuse
+        # flag mid-run stops every request not yet sent, not just the next run
+        # (audit C5). One stat() per domain is nothing next to a network request.
+        self.kill.check_external()
         if self.kill.tripped:
             obs.skipped_reason = "halted_by_kill_switch"
             obs.error_type = "halted"
             return obs
         async with self.sem:
-            if self._stopped.is_set():
+            self.kill.check_external()
+            if self._stopped.is_set() or self.kill.tripped:
                 obs.skipped_reason = "halted_by_kill_switch"
                 obs.error_type = "halted"
                 return obs
@@ -564,6 +579,11 @@ class Crawler:
                     try:
                         send_no = await self.budget.take(domain, "https_unverified")
                         obs.sends = send_no
+                        # Clear the phase-1 error before the retry, exactly as the http
+                        # fallback does below. Left set, a retry that READ the headers
+                        # was still classified NO_RESPONSE, which defeated the whole
+                        # point of this phase (audit C1). cert_error stays True.
+                        obs.error_type = None
                         async with httpx.AsyncClient(timeout=httpx.Timeout(
                                 self.total_timeout, connect=self.connect_timeout),
                                 http2=False, verify=False, cookies=None) as insecure:

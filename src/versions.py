@@ -10,16 +10,21 @@ Two additions the brief did not have, both relevant to classification:
   * PHP published *source-backport branches* for 7.4 / 8.0 / 8.1 (no official
     releases, no version-number change). A host patched from those branches
     still reports an old version string -> it lands in EOL_UNFIXED.
-  * Distro/LTS vendors received the patches in ADVANCE, and the PHP project
-    explicitly warned that volunteer repo rpms.remirepo.net would NOT have
-    updates on release day. So a distro-looking suffix is evidence of a
-    *possible* fix, never evidence of a fix.
+  * Distro/LTS vendors received the patches in ADVANCE ("Linux distributions
+    and LTS vendors received the patches in advance, so check your vendor for
+    updated packages", php.net advisory 2026-10-21-5). Vendors ship on their own
+    schedules, so a distro-looking suffix is evidence of a *possible* fix, never
+    evidence of a fix. (An earlier version of this docstring attributed a
+    remirepo release-day warning to the PHP project; php.net says no such thing,
+    checked 2026-10-23, and the claim is withdrawn.)
 
 Do not import pandas/numpy here; this module is read by the classifier, the
 reporter and the tests.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass, field as _field
 
 # ---------------------------------------------------------------- disclosure clock
 # The PHP project scheduled the release for 14:00 UTC on 2026-10-21 and shipped
@@ -112,3 +117,89 @@ SOURCES = [
 
 STUDY_NAME = "PHP2Shell patch-adoption pilot"
 CVE_IDS = ("CVE-2026-109618", "CVE-2026-109619")
+
+
+# ---------------------------------------------------------------- events
+# A patch EVENT is one fixed-version table plus the clock and branch-support facts
+# that were true when it happened. The study classifies against PHP2SHELL by
+# default; the other events exist so the same classifier can read archived
+# (Common Crawl) headers against a different release and measure how this
+# population USUALLY adopts a security fix (docs/analysis_plan.md §3, §7.8).
+@dataclass(frozen=True)
+class PatchEvent:
+    key: str
+    title: str
+    t0_utc: str
+    fixed_releases: dict = _field(default_factory=dict)   # (maj, min) -> (maj, min, patch)
+    eol_ceiling: tuple = (8, 1)                            # branches <= this have no fix
+    published: bool = True
+    # Pre-release builds of a NEWER branch that already carry the fix, as
+    # {(maj, min): ("RC", n)} meaning RCn and later. Anything else pre-release
+    # on a newer branch is unrankable, not patched.
+    prerelease_fixed: dict = _field(default_factory=dict)
+    note: str = ""
+    sources: tuple = ()
+
+    @property
+    def newest_supported(self) -> tuple[int, int]:
+        return max(self.fixed_releases)
+
+    def fixed_for_branch(self, branch) -> tuple[int, int, int] | None:
+        return self.fixed_releases.get((int(branch[0]), int(branch[1])))
+
+    def is_newer_branch(self, branch) -> bool:
+        return tuple(branch[:2]) > self.newest_supported
+
+    def is_eol_branch(self, branch) -> bool:
+        return tuple(branch[:2]) <= self.eol_ceiling
+
+
+PHP2SHELL = PatchEvent(
+    key="php2shell",
+    title="PHP2Shell (CVE-2026-109618 / CVE-2026-109619)",
+    t0_utc=T0_UTC,
+    fixed_releases=dict(FIXED_RELEASES),
+    eol_ceiling=EOL_BRANCH_CEILING,
+    # php.net 2026-10-21: "PHP 8.6.0 RC4 ... contains the fixes for two critical
+    # vulnerabilities". RC1-RC3 predate the fix.
+    prerelease_fixed={(8, 6): ("RC", 4)},
+    sources=tuple(SOURCES),
+)
+
+# Historical benchmark, used ONLY on archived headers. CVE-2024-4577 (PHP-CGI
+# argument injection) was exploitable only on Windows PHP-CGI in some locales, so
+# this event measures how fast the population ADOPTS a critical security release,
+# not how exposed it was. Fixed 2024-06-06 in 8.3.8 / 8.2.20 / 8.1.29; 8.0 was
+# already EOL. Verify against php.net/ChangeLog-8.php before the plan is frozen.
+CVE_2024_4577 = PatchEvent(
+    key="cve_2024_4577",
+    title="CVE-2024-4577 (PHP-CGI argument injection), adoption benchmark",
+    t0_utc="2024-06-06T00:00:00Z",
+    fixed_releases={(8, 1): (8, 1, 29), (8, 2): (8, 2, 20), (8, 3): (8, 3, 8)},
+    eol_ceiling=(8, 0),
+    note="Adoption benchmark only; exposure required Windows PHP-CGI.",
+    sources=("https://www.php.net/ChangeLog-8.php",),
+)
+
+# Pre-committed second threshold (docs/analysis_plan.md §5.2). php.net 2026-10-23:
+# the CVE-2026-115560 fix ships in the next regular release, not yet published.
+# Fill fixed_releases and set published=True by a dated deviation-log entry.
+CVE_2026_115560 = PatchEvent(
+    key="cve_2026_115560",
+    title="CVE-2026-115560 (session upload progress), secondary threshold T2",
+    t0_utc="",
+    fixed_releases={},
+    published=False,
+    note="Unpublished: classifying against it raises.",
+    sources=("https://www.php.net/archive/2026.php",),
+)
+
+EVENTS: dict[str, PatchEvent] = {e.key: e for e in (PHP2SHELL, CVE_2024_4577, CVE_2026_115560)}
+
+
+def get_event(key: str | None) -> PatchEvent:
+    ev = EVENTS[key or PHP2SHELL.key]
+    if not ev.published or not ev.fixed_releases:
+        raise ValueError(f"event {ev.key!r} has no published fixed releases yet; "
+                         "add them by a dated entry in docs/analysis_plan.md §12")
+    return ev
