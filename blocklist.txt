@@ -1,0 +1,34 @@
+# blocklist.txt — HARD RULE 5: domains removed from measurement before the next snapshot.
+#
+# One domain per line. `#` starts a comment. Blank lines ignored. Matched against the
+# lower-cased registrable domain of the sample, exact string match (no wildcards, on
+# purpose — a typo here must fail loudly by matching nothing, not quietly by matching
+# everything).
+#
+# Two ways a domain gets in here:
+#   1. Someone asks. Any email or phone call mentioning this study, this project URL, or
+#      the User-Agent goes in immediately, no verification, no discussion, before the
+#      next snapshot. Confirmed opt-outs are recorded here; the reason is kept in
+#      logs/optouts.md, not in this file and never in a publication.
+#   2. Researcher judgment before collection starts: infrastructure whose operators are
+#      themselves incident responders or law enforcement, where an unusual inbound request
+#      is more likely to be treated as recon than as traffic. These were in the sampling
+#      frame, and they are excluded.
+#
+# The list is applied by src/fetch.py:load_blocklist() at Crawler construction, so an
+# edit takes effect on the very next run without restarting anything. data/ is gitignored;
+# this file is not, because the list of who opted out is itself a disclosure — add
+# opt-outs to blocklist.local.txt (also gitignored) and keep only the categories above
+# in this committed file.
+
+# --- category 2: security operations and law enforcement infrastructure
+cisa.gov
+us-cert.gov
+nsa.gov
+fbi.gov
+ociso.gov
+leima.org
+
+# --- category 1: requests received
+# (none yet — if you are reading this because someone asked to stop, add the domain
+#  below and record the date and channel in logs/optouts.md)

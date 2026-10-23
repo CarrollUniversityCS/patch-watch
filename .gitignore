@@ -1,0 +1,26 @@
+# HARD RULE 7 (mission brief): per-domain results are never published.
+# Everything that identifies a single government domain stays off git.
+data/
+logs/
+reports/*
+!reports/*.md
+*.db
+*.sqlite
+*.sqlite3
+blocklist.local.txt
+
+# Toolchain
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+
+# Safety net: nothing that smells like an export gets committed by accident
+*.csv
+*.jsonl
+*.parquet
+
+# Local TLS material for the mock server (self-signed cert + key, regenerated on demand)
+tests/fixtures/
