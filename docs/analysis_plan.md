@@ -1,10 +1,17 @@
 # Analysis plan: Wisconsin .gov census, PHP2Shell patch adoption
 
-**Status: DRAFT v0.2, 2026-10-23. Not yet frozen.** The plan is frozen by a commit titled
-`analysis plan v1.0 (frozen)`, made **before Gate A opens**. After the freeze, any change
-is a dated entry in §12 (deviation log) that says what changed, why, and whether any data
-had been seen when it changed. This file is the study's pre-registration. Results that
-come from analyses not listed here are reported as exploratory.
+**Status: FROZEN v1.0, 2026-10-23**, by the commit titled `analysis plan v1.0 (frozen)`.
+The freeze came before any live request and before any archived (Common Crawl) data was
+collected.
+
+- **What is frozen.** This text, plus the implementation in that commit: `src/classify.py`,
+  `src/versions.py`, `src/analyze.py`, `src/wi_frame.py`, `src/baseline_cc.py`,
+  `src/hosting.py`. Every report prints the code commit it ran from (`provenance:` line).
+- **Changing anything after the freeze.** Any change to the plan, or to the code that
+  decides a class, a state, a cohort or a table, is a dated entry in §12. The entry says
+  what changed, why, and whether any data had been seen when it changed.
+- **Status of results.** This file is the study's pre-registration. Results that come
+  from analyses not listed here are reported as exploratory.
 
 Design source: `reports/AUDIT_2026-10-23.md`. Items marked **[D#]** are decisions for the
 PI (§11). Every section names the code that implements it, so a reader can check the
@@ -177,6 +184,25 @@ unchanged.
 
 ## 7. Analysis (`src/analyze.py`)
 
+### 7.0 Primary endpoint and contingency (pre-registered)
+- **Primary endpoint.** Wisconsin region, entity unit, primary scenario:
+  - **A(14)**, computed at the last live point whose whole day from t0 is ≤ 14;
+  - the number of cohort entities **never observed patched** by the last observation.
+
+  Both appear first in every report (`analyze.primary_endpoint`). Every other number in
+  this plan is secondary.
+- **Contingency, fixed now so it cannot be chosen after seeing data.** If the Wisconsin
+  cohort (§7.3) has fewer than **30** entities:
+  - the Wisconsin RQ2/RQ3 results are reported descriptively, with no Turnbull median;
+  - the pooled cohort across Wisconsin and the comparison states is reported alongside;
+  - the paper leads with RQ0 (measurability) and RQ4 (hosting).
+
+  The threshold is `analyze.MIN_COHORT`.
+- **Provenance.** Every report prints the code commit (flagging uncommitted changes to
+  `src/`), the frame's sha256 and the ASN table's sha256. The ASN table
+  (`data/ip2asn-v4.tsv.gz`) is downloaded once, before the first analysis, and is not
+  replaced afterwards.
+
 One command writes every table below into `reports/analysis_<label>_<event>.md`, with
 suppression applied. The paper's tables are generated output.
 
@@ -193,7 +219,8 @@ Runs are filtered before anything is computed:
 
 ### 7.2 RQ1: exposure before disclosure
 - The state distribution among entities with a pre-cutoff archived capture.
-- Coverage (captured / frame) is always shown alongside it.
+- Coverage (captured / frame) is always shown alongside it, with the median and oldest
+  capture age in days before t0.
 
 ### 7.3 RQ2: adoption curve
 **Cohort.** Entities EXPOSED at their first observation: the archived baseline if one
@@ -329,14 +356,14 @@ those dates. No causal claim is made from them.
 | # | Decision | Status |
 |---|---|---|
 | D1 | Tribal nations | **Decided 2026-10-23: not measured anywhere.** Excluded in the frame and enforced again at sample load. |
-| D2 | National 319-domain pilot | Default: **paused.** Its tribal stratum would now be dropped at load anyway. |
-| D3 | Approve the §6 schedule (up to 22 snapshots) in place of "A, B, no third"? | Default: approve. The IRB precondition is met. |
-| D4 | Pre-publication notice to WI CRT / MS-ISAC, aggregate only, 30-day embargo | Default: yes. |
-| D5 | Suppression threshold | Default: fewer than 10. |
+| D2 | National 319-domain pilot | **Decided at freeze: paused.** Its tribal stratum would be dropped at load anyway. |
+| D3 | The §6 schedule (up to 22 snapshot days) in place of "A, B, no third" | **Decided at freeze: approved.** The IRB precondition is met. |
+| D4 | Pre-publication notice to WI CRT / MS-ISAC, aggregate only, 30-day embargo | **Decided at freeze: yes.** |
+| D5 | Suppression threshold | **Decided at freeze: fewer than 10.** |
 | D6 | Comparison states | **Decided 2026-10-23: live, as a secondary aim, in separate runs** (§6, §7.9), plus archived data. Reason: the live readings cannot be collected after the fact, and each site's burden is unchanged. |
 
 ## 12. Deviation log
 
 | Date | Change | Data seen at the time? | Reason |
 |---|---|---|---|
-| — | (none; plan not yet frozen. Pre-freeze drafts: v0.1 and v0.2 on 2026-10-23, both before any live or archived data was collected.) | — | — |
+| 2026-10-23 | **Frozen as v1.0.** Pre-freeze drafts v0.1 and v0.2 were written the same day. The freeze added §7.0 (primary endpoint and contingency rule) and turned D2–D5 into decisions. | **No.** No live or archived data had been collected. | Pre-registration before collection. |

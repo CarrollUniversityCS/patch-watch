@@ -15,7 +15,8 @@ https://github.com/JForden/JForden.)
 live-style number it has produced came from the loopback mock rig in
 `tests/mock_server.py`. The IRB determined on 2026-10-23 that this is not human-subjects
 research (`docs/IRB_DETERMINATION.md`). The design is pre-registered in
-`docs/analysis_plan.md`, which must be frozen before Gate A opens.
+`docs/analysis_plan.md`, **frozen as v1.0 on 2026-10-23** before any data was collected.
+From then on, any change to it or to the code that decides results is logged in its §12.
 
 ## The questions
 
@@ -47,7 +48,7 @@ sites hide it, and distros can backport a fix without changing the version strin
 | `src/pipeline.py` | One snapshot end to end: preflight → fetch → classify → store → diff → audit → summary. |
 | `scripts/run_snapshot.py` | The wrapper a cron line calls. |
 | `scripts/cron.disabled` | The schedule, deliberately commented out (Stage 4 says install it disabled). |
-| `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 372 at 2026-10-23). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
+| `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 375 at 2026-10-23). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
 | `data/` | Frame, sample, database, ledger exports — gitignored. See `data/README.md`. |
 | `docs/` | `analysis_plan.md` (the pre-registration), `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out notice, to be published as the GitHub profile README that `PROJECT_URL` and the user agent point at), `IRB_INQUIRY_NOTE.md` and `IRB_DETERMINATION.md`. |
 | `requirements.txt` | Exact dependency versions. httpx is pinned on purpose (no-cookie guarantee). |

@@ -204,3 +204,33 @@ def test_asn_table_lookup_and_concentration(tmp_path):
     assert c["clusters"] == 3 and c["largest_cluster"] == 5
     assert c["share_in_clusters_ge5"] == pytest.approx(5 / 7)
     assert c["effective_independent"] == pytest.approx(1 / ((5 / 7) ** 2 + 2 * (1 / 7) ** 2))
+
+
+# ------------------------------------------------------------------ pre-registered endpoint
+def test_primary_endpoint_takes_last_point_by_day_14(study):
+    conn, frame = study
+    live, _ = analyze.load_live(conn, frame, versions.PHP2SHELL)
+    days = analyze.point_days(live)
+    co = analyze.cohort_analysis(analyze.unit_states(live, frame, analyze.Scenario()), days)
+    pe = analyze.primary_endpoint(co)
+    assert pe["point"] == "S2" and pe["patched"] == 1 and pe["denominator"] == 1
+    assert pe["never_patched"] == 1
+    assert pe["contingency"] is True, "2 cohort entities is far below the pre-registered 30"
+
+
+def test_primary_endpoint_ignores_points_after_day_14():
+    curve = [{"point": f"P{d}", "day": d + 0.4, "patched": d, "exposed": 1,
+              "denominator": d + 1} for d in (3, 14, 15, 30)]
+    co = analyze.Cohort(members=["x"] * 40, first_point={}, curve=curve, intervals=[],
+                        hid_without_patching=0, flapping_excluded=0, late_visible=0)
+    pe = analyze.primary_endpoint(co)
+    assert pe["point"] == "P14" and pe["contingency"] is False
+
+
+def test_report_states_primary_endpoint_contingency_and_provenance(study):
+    conn, frame = study
+    text = analyze.build_report(conn, frame, versions.PHP2SHELL, sup=analyze.Suppressor())
+    assert "Primary endpoint (pre-registered" in text
+    assert "Contingency rule applies" in text
+    assert "Median not reported" in text or "RQ3" in text
+    assert "provenance: code `" in text

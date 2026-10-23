@@ -55,6 +55,12 @@ CLASS_TO_STATE = {
     "NOT_MEASURED": "UNREACHED",
 }
 P_STATES = ("EXPOSED", "EOL", "AMBIGUOUS", "PATCHED", "OPAQUE")
+# Pre-registered primary endpoint (plan §7.0): Wisconsin, entity unit, A(d) at the last
+# live point no later than day 14, and the never-patched count at the last observation.
+PRIMARY_DAY = 14
+# Contingency (plan §7.0): below this many cohort entities the Wisconsin RQ2/RQ3 results
+# are descriptive only, the median is not reported, and the pooled cohort is shown too.
+MIN_COHORT = 30
 V_STATES = ("EXPOSED", "PATCHED")
 
 # PHP2Shell: first observed exploitation. Archived captures from this moment on are
@@ -427,10 +433,29 @@ def _table(head: list[str], rows: list[list[str]]) -> list[str]:
            ["| " + " | ".join(r) + " |" for r in rows]
 
 
+def provenance(asn_path: Path | None = None, frame_meta: dict | None = None) -> str:
+    """Code commit, frame hash and ASN-table hash, so a reader can tie every table to
+    the exact inputs and the pre-registered implementation (plan §7.0)."""
+    import hashlib
+    import subprocess
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=config.ROOT,
+                                capture_output=True, text=True, timeout=5).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "src"], cwd=config.ROOT,
+                               capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        commit, dirty = "unknown", ""
+    asn = (hashlib.sha256(Path(asn_path).read_bytes()).hexdigest()[:16]
+           if asn_path and Path(asn_path).exists() else "not loaded")
+    fr = (frame_meta or {}).get("frame_csv_sha256", "unknown")[:16]
+    return (f"- provenance: code `{commit or 'unknown'}`{' (src/ MODIFIED since commit)' if dirty else ''}"
+            f"; frame sha256 `{fr}`; ASN table sha256 `{asn}`")
+
+
 def build_report(conn: sqlite3.Connection, frame: Frame, event: versions.PatchEvent, *,
                  sup: Suppressor, asn: hosting.AsnTable | None = None,
                  include_mock: bool = False, frame_meta: dict | None = None,
-                 label: str = "") -> str:
+                 label: str = "", asn_path: Path | None = None) -> str:
     live, runs = load_live(conn, frame, event, include_mock=include_mock)
     base, base_info = load_baseline(conn, frame, event)
     readings = base + live
@@ -447,7 +472,8 @@ def build_report(conn: sqlite3.Connection, frame: Frame, event: versions.PatchEv
           + (f"; excluded: {json.dumps((frame_meta or {}).get('excluded_counts', {}).get('tribal_nations_by_decision_D1', {}))}"
              if frame_meta else ""),
           f"- disclosure: {'counts 1-9 shown as <10, complementary suppression marked §' if sup.on else 'UNSUPPRESSED - PI only, never publish'}",
-          "- vendors, ASNs and hosting providers are never named", ""]
+          "- vendors, ASNs and hosting providers are never named",
+          provenance(asn_path, frame_meta), ""]
     if not readings:
         L.append("No readings yet.")
         return "\n".join(L) + "\n"
@@ -461,8 +487,10 @@ def build_report(conn: sqlite3.Connection, frame: Frame, event: versions.PatchEv
         by_point, d2u = unit_states_and_map(reg_readings, reg_frame, primary)
         L += [f"## Region: {region}", ""]
         L += _rq0(by_point, days, reg_frame, reg_readings, sup)
-        L += _rq1(by_point, base_info, reg_frame, sup)
+        L += _rq1(by_point, base_info, reg_frame, sup, reg_readings)
         co = cohort_analysis(by_point, days, flapping_units(reg_readings, d2u))
+        if region in ("wisconsin", "all"):
+            L += _primary(co, sup, readings, frame, days)
         L += _rq23(co, sup)
         L += _rq4(reg_readings, reg_frame, days, asn, sup)
         L += _sensitivity(reg_readings, reg_frame, days, asn, sup)
@@ -504,11 +532,15 @@ def _rq0(by_point, days, frame, readings, sup) -> list[str]:
     return L
 
 
-def _rq1(by_point, base_info, frame, sup) -> list[str]:
+def _rq1(by_point, base_info, frame, sup, readings=()) -> list[str]:
     L = ["### RQ1 - exposure before disclosure (archived)", ""]
     if "baseline" not in by_point:
         return L + ["No pre-cutoff archived captures in this region.", ""]
     v = visibility(by_point["baseline"])
+    ages = sorted(-r.day for r in readings if r.point == "baseline")
+    if ages:
+        L += [f"Capture age before t0 (days): median {ages[len(ages) // 2]:.0f}, "
+              f"oldest {ages[-1]:.0f}.", ""]
     n_ent = len(set(frame.entity_stratum) & {frame.rows[d]["entity_id"] for d in frame.rows})
     L += [f"Entities with a pre-cutoff capture: {sup.count(v['units'])} of {n_ent} "
           f"(coverage {sup.share(v['units'], n_ent)}; NOT a random subset - CC favours "
@@ -516,6 +548,42 @@ def _rq1(by_point, base_info, frame, sup) -> list[str]:
     L += _table(["", *STATES, "P", "V", "EXPOSED among V"],
                 [["baseline", *sup.row([v[s] for s in STATES]), sup.count(v["P"]),
                   sup.count(v["V"]), sup.share(v["EXPOSED"], v["V"])]]) + [""]
+    return L
+
+
+def primary_endpoint(co: Cohort) -> dict[str, Any]:
+    """§7.0. A(d) at the last live point with whole day <= PRIMARY_DAY, and the number of
+    cohort entities never observed patched by the last observation."""
+    at = [c for c in co.curve if int(c["day"] // 1) <= PRIMARY_DAY]
+    c = at[-1] if at else None
+    return {"cohort": len(co.members), "point": c["point"] if c else None,
+            "day": c["day"] if c else None,
+            "patched": c["patched"] if c else None,
+            "denominator": c["denominator"] if c else None,
+            "never_patched": sum(1 for _, r in co.intervals if r == float("inf")),
+            "contingency": len(co.members) < MIN_COHORT}
+
+
+def _primary(co: Cohort, sup: Suppressor, readings: list[Reading], frame: Frame,
+             days: dict[str, float]) -> list[str]:
+    pe = primary_endpoint(co)
+    L = ["### Primary endpoint (pre-registered, plan §7.0)", ""]
+    if pe["point"] is None:
+        return L + ["No live point on or before day 14 yet.", ""]
+    L += [f"A({PRIMARY_DAY}) = {sup.share(pe['patched'], pe['denominator'])} "
+          f"({sup.count(pe['patched'])} of {sup.count(pe['denominator'])} still-visible cohort "
+          f"entities patched at `{pe['point']}`, day {pe['day']:.1f}); cohort "
+          f"{sup.count(pe['cohort'])}; never observed patched by the last observation: "
+          f"{sup.count(pe['never_patched'])}.", ""]
+    if pe["contingency"]:
+        # every region's readings against the whole frame: one pooled entity cohort
+        bp, d2u = unit_states_and_map(readings, frame, Scenario())
+        pco = cohort_analysis(bp, days, flapping_units(readings, d2u))
+        ppe = primary_endpoint(pco)
+        L += [f"**Contingency rule applies** (Wisconsin cohort < {MIN_COHORT}): Wisconsin "
+              f"results are descriptive only and no median is reported. Pooled cohort across "
+              f"all regions: {sup.count(ppe['cohort'])}, A({PRIMARY_DAY}) = "
+              f"{sup.share(ppe['patched'] or 0, ppe['denominator'] or 0)}.", ""]
     return L
 
 
@@ -538,7 +606,10 @@ def _rq23(co: Cohort, sup: Suppressor) -> list[str]:
     if cdf:
         L += _table(["day <=", "F(t)"], [[f"{t:.1f}", f"{f:.2f}"] for t, f in cdf]) + [""]
         med = next((t for t, f in cdf if f >= 0.5), None)
-        L.append(f"Median time to patch: {'not reached' if med is None else f'<= {med:.1f} days'}.")
+        if len(co.members) < MIN_COHORT:
+            L.append(f"Median not reported: cohort below {MIN_COHORT} (plan §7.0 contingency).")
+        else:
+            L.append(f"Median time to patch: {'not reached' if med is None else f'<= {med:.1f} days'}.")
     L += [f"Never observed patched (right-censored; includes cohort entities that later went "
           f"dark, ambiguous or unreachable): {sup.count(still)}. "
           f"Hid the version instead of patching (exposed -> opaque, never patched): "
@@ -699,7 +770,7 @@ def main(argv: list[str] | None = None) -> int:
     conn = db.connect(args.db)
     sup = Suppressor(on=not args.unsuppressed)
     text = build_report(conn, frame, event, sup=sup, asn=asn, include_mock=args.include_mock,
-                        frame_meta=meta, label=args.label)
+                        frame_meta=meta, label=args.label, asn_path=Path(args.asn_table))
     name = f"analysis_{args.label or 'adhoc'}_{event.key}"
     out = (config.DATA_DIR / f"{name}_UNSUPPRESSED.md") if args.unsuppressed \
         else (config.REPORTS_DIR / f"{name}.md")
