@@ -52,8 +52,9 @@ backport a fix without changing the version string.
 .venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --label SNAP_A
 ```
 
-Read `docs/OPERATIONS.md` before running anything live: the gate condition in code is
-`LIVE_REQUESTS_ENABLED or PATCHWATCH_GATE_A=APPROVED`, which is one key, not two.
+Read `docs/OPERATIONS.md` before running anything live: the gate requires both
+`LIVE_REQUESTS_ENABLED` and `PATCHWATCH_GATE_A=APPROVED`. The environment marker alone
+cannot enable live traffic.
 
 To stop all traffic immediately: `echo "ABUSE_COMPLAINT" > logs/abuse.flag`. Runs refuse
 while that marker exists, before any name is resolved.

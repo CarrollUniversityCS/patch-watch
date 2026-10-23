@@ -234,16 +234,13 @@ the source where a reader would wonder:
   Gate A tests. That file is 541 lines; the Gate A block is 506-541. The old range came from
   the interrupted child's version of the file, which I deleted.
 
-### Still needs your decision
+### Gate A safeguard
 
-1. **Gate A is one key, not two.** `assert_live_allowed()` raises only if
-   `LIVE_REQUESTS_ENABLED` is False **and** `PATCHWATCH_GATE_A` is not exactly `APPROVED`.
-   So one stray `export PATCHWATCH_GATE_A=APPROVED` in a shell profile opens live traffic,
-   with no code change and no second confirmation. `tests/test_fetch_rules.py:506-541`
-   pins this behaviour deliberately, so it is arguably the intended design (the env marker
-   *is* the encoding of your approval message). If you want two independent keys, change
-   `or` to `and` in `src/fetch.py:93` and update those tests — my recommendation is to do
-   that for the first live week.
+Gate A now requires both `LIVE_REQUESTS_ENABLED = True` and
+`PATCHWATCH_GATE_A=APPROVED`. A stray environment marker cannot enable live traffic.
+The flag remains `False`; this change does not open Gate A or authorize a live run.
+`tests/test_fetch_rules.py` checks that either key alone is refused and both are
+required.
 
 ## Open
 

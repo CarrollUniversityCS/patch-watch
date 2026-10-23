@@ -90,10 +90,11 @@ def assert_live_allowed(allow_loopback_only: bool = False) -> None:
     if allow_loopback_only:
         return
     marker = os.environ.get(config.GATE_MARKER_ENV, "")
-    if not (config.LIVE_REQUESTS_ENABLED or marker.strip().upper() == "APPROVED"):
+    if not (config.LIVE_REQUESTS_ENABLED and marker.strip().upper() == "APPROVED"):
         raise GateClosed(
             "GATE A is not open. No request will be sent to any government domain. "
-            f"The operator must reply 'GATE A APPROVED' and the run must set "
+            f"The operator must reply 'GATE A APPROVED', set "
+            "LIVE_REQUESTS_ENABLED=True in src/config.py, and run with "
             f"{config.GATE_MARKER_ENV}=APPROVED."
         )
     if "[PROJECT_URL]" in config.USER_AGENT or "[CONTACT_EMAIL]" in config.USER_AGENT:

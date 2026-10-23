@@ -516,19 +516,28 @@ def test_gate_a_refuses_live_without_the_marker(monkeypatch):
         fetch.assert_live_allowed()
 
 
-def test_gate_a_marker_alone_opens_live_traffic(monkeypatch):
-    """Documented reality, not an endorsement: the gate is an OR (src/fetch.py:93).
-
-    One stray `export PATCHWATCH_GATE_A=APPROVED` in a shell profile is enough to
-    authorise live traffic with no code change. See
-    reports/STATUS_GATE_A_2026-10-23.md for the decision this is waiting on.
-    """
+def test_gate_a_marker_alone_does_not_open_live_traffic(monkeypatch):
     monkeypatch.setattr(config, "LIVE_REQUESTS_ENABLED", False)
+    monkeypatch.setenv(config.GATE_MARKER_ENV, "approved")   # matched case-insensitively
+    with pytest.raises(fetch.GateClosed):
+        fetch.assert_live_allowed()
+
+
+def test_gate_a_config_flag_alone_does_not_open_live_traffic(monkeypatch):
+    monkeypatch.setattr(config, "LIVE_REQUESTS_ENABLED", True)
+    monkeypatch.delenv(config.GATE_MARKER_ENV, raising=False)
+    with pytest.raises(fetch.GateClosed):
+        fetch.assert_live_allowed()
+
+
+def test_gate_a_requires_both_approvals(monkeypatch):
+    monkeypatch.setattr(config, "LIVE_REQUESTS_ENABLED", True)
     monkeypatch.setenv(config.GATE_MARKER_ENV, "approved")   # matched case-insensitively
     fetch.assert_live_allowed()
 
 
 def test_gate_a_still_refuses_a_placeholder_identity(monkeypatch):
+    monkeypatch.setattr(config, "LIVE_REQUESTS_ENABLED", True)
     monkeypatch.setenv(config.GATE_MARKER_ENV, "APPROVED")
     monkeypatch.setattr(config, "USER_AGENT", "Study (+[PROJECT_URL]; [CONTACT_EMAIL])")
     with pytest.raises(fetch.GateClosed):

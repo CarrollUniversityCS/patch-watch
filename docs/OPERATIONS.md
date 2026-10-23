@@ -11,29 +11,24 @@ the person operating it at 07:00 with a complaint email open in another tab.
 | Live | `python src/pipeline.py` | Yes, and it refuses unless Gate A is open. |
 
 **Gate A** is `fetch.assert_live_allowed()` (`src/fetch.py:88`). Read the code before you
-trust this paragraph, because the condition is an **or**, not an and:
+trust this paragraph: live requests require both the committed config flag and the
+runtime environment marker:
 
 ```python
-if not (config.LIVE_REQUESTS_ENABLED or marker.strip().upper() == "APPROVED"):
+if not (config.LIVE_REQUESTS_ENABLED and marker.strip().upper() == "APPROVED"):
     raise GateClosed(...)
 ```
 
-Either one of these opens the gate on its own:
+Both of these are required to open the gate:
 
-1. `PATCHWATCH_GATE_A=APPROVED` in the environment of the process, **or**
+1. `PATCHWATCH_GATE_A=APPROVED` in the environment of the process, **and**
 2. `LIVE_REQUESTS_ENABLED = True` in `src/config.py` (a committed code change).
 
-So a stray `export PATCHWATCH_GATE_A=APPROVED` left in a shell profile is enough to put
-live traffic on. The word must be exactly `APPROVED` after stripping and upper-casing;
+The word must be `APPROVED` after stripping and upper-casing;
 `yes`, `true` and `GATE A APPROVED` do not open it. Right now `LIVE_REQUESTS_ENABLED` is
-`False` and no approved marker is set, so live runs refuse and no database is even
-created. My own docstring in `src/pipeline.py` described this as "config **and** env";
-the code is **or**, the code is what runs, and the docstring has been corrected to match.
-
-If you want two independent keys before anything goes out — which is what I would
-recommend for the first live week — change the `or` to `and` and fix
-`tests/test_fetch_rules.py:1103-1137`, which currently pins the "either key opens it"
-behaviour deliberately.
+`False`, so live runs refuse and no database is even created, regardless of the marker.
+Keep the config flag `False` unless the operator has explicitly decided to open Gate A;
+an environment marker alone cannot enable live traffic.
 
 Gate A also checks rule 3 on the way out: a `User-Agent` still containing
 `[PROJECT_URL]` or `[CONTACT_EMAIL]` is a refusal, so the identity string has to be

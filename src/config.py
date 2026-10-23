@@ -1,17 +1,16 @@
 """Project configuration. Every hard rule from the mission brief that is a
 number lives here so it can be audited in one place.
 
-GATE A: nothing in this file authorises live traffic. `LIVE_REQUESTS_ENABLED`
-stays False until the operator (Jack Forden) replies "GATE A APPROVED", and the
-fetcher refuses to run when it is False.
+GATE A: nothing in this file alone authorises live traffic. Live requests require
+both `LIVE_REQUESTS_ENABLED=True` and the `PATCHWATCH_GATE_A=APPROVED` environment
+marker. Keep the flag False until the operator (Jack Forden) replies "GATE A APPROVED".
 
-Gate A is a human decision, not a check the code can make: the one condition the
-fetcher can verify is a filled-in User-Agent. Its other precondition — that the
-notice at PROJECT_URL, Jack Forden's GitHub profile README, is actually published
-and reads as an opt-out page — has to be confirmed by the operator. There is no
-separate hosted project page; PROJECT_URL is the address our own traffic carries,
-so an operator who looks us up from a log lands on the notice. See
-docs/OPERATIONS.md, "Identity URL".
+Gate A is a human decision, not a check the code can make: alongside the two-key
+check, the fetcher verifies a filled-in User-Agent. The notice at PROJECT_URL,
+Jack Forden's GitHub profile README, must actually be published and read as an
+opt-out page; the operator has to confirm that. There is no separate hosted
+project page; PROJECT_URL is the address our own traffic carries, so an operator
+who looks us up from a log lands on the notice. See docs/OPERATIONS.md, "Identity URL".
 """
 
 from __future__ import annotations

@@ -9,13 +9,12 @@ but it does refuse to start when they cannot be satisfied (preflight), and it
 re-audits the ledger after the fact so a rule broken mid-run is caught before
 the next snapshot rather than at publication time (postflight).
 
-Gate A: fetch.assert_live_allowed() (src/fetch.py:88) raises unless EITHER
-src/config.py says LIVE_REQUESTS_ENABLED OR the PATCHWATCH_GATE_A env var is exactly
-APPROVED - the check is `or`, not `and`, so one stray exported variable opens live
-traffic; see docs/OPERATIONS.md before relying on it. The only way to exercise this
-module before Gate A is --mock, which points every domain at the loopback rig in
-tests/mock_server.py. Mock mode never resolves or contacts a real name, and it is the
-only mode this repo has ever run in.
+Gate A: fetch.assert_live_allowed() (src/fetch.py:88) raises unless src/config.py
+enables LIVE_REQUESTS_ENABLED AND the PATCHWATCH_GATE_A env var is APPROVED. The
+environment marker alone cannot open live traffic; see docs/OPERATIONS.md. The only way
+to exercise this module before Gate A is --mock, which points every domain at the
+loopback rig in tests/mock_server.py. Mock mode never resolves or contacts a real name,
+and it is the only mode this repo has ever run in.
 """
 
 from __future__ import annotations
