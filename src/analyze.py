@@ -454,9 +454,7 @@ def build_report(conn: sqlite3.Connection, frame: Frame, event: versions.PatchEv
 
     primary = Scenario()
     for region in regions:
-        reg_frame = frame if region == "all" else Frame(
-            {d: r for d, r in frame.rows.items() if (r.get("region") or "all") == region},
-            frame.entity_stratum)
+        reg_frame = frame if region == "all" else region_frame(frame, region)
         reg_readings = [r for r in readings if r.domain in reg_frame.rows]
         if not reg_readings:
             continue
@@ -468,6 +466,7 @@ def build_report(conn: sqlite3.Connection, frame: Frame, event: versions.PatchEv
         L += _rq23(co, sup)
         L += _rq4(reg_readings, reg_frame, days, asn, sup)
         L += _sensitivity(reg_readings, reg_frame, days, asn, sup)
+    L += _rq6(frame, readings, days, sup)
     L += _historical(conn, frame, sup)
     return "\n".join(L) + "\n"
 
@@ -590,6 +589,70 @@ def _sensitivity(readings, frame, days, asn, sup) -> list[str]:
         rows.append([sc.name, sup.count(len(co.members)), sup.count(c["patched"]),
                      sup.share(c["patched"], c["denominator"]), ""])
     L += _table(["scenario", "cohort", "patched", "A(latest)", "note"], rows) + [""]
+    return L
+
+
+def region_frame(frame: Frame, region: str) -> Frame:
+    return Frame({d: r for d, r in frame.rows.items() if (r.get("region") or "all") == region},
+                 frame.entity_stratum)
+
+
+def curve_by_day(readings: list[Reading], frame: Frame, days: dict[str, float],
+                 sc: Scenario) -> tuple[int, dict[int, dict[str, Any]]]:
+    """Cohort size and the A(d) curve keyed by whole day from t0. Wisconsin and the
+    comparison states are separate snapshots (minutes apart), so curves are matched on
+    the day, not on the run; the last point of a day stands for that day."""
+    by_point, d2u = unit_states_and_map(readings, frame, sc)
+    co = cohort_analysis(by_point, days, flapping_units(readings, d2u))
+    out: dict[int, dict[str, Any]] = {}
+    for c in co.curve:
+        out[int(c["day"] // 1)] = c
+    return len(co.members), out
+
+
+def _rq6(frame: Frame, readings: list[Reading], days: dict[str, float],
+         sup: Suppressor) -> list[str]:
+    """§7.9: Wisconsin vs. the comparison states on matched days. Descriptive."""
+    regions = {r.get("region") for r in frame.rows.values()}
+    if not {"wisconsin", "comparison"} <= regions:
+        return []
+    live = [r for r in readings if r.point != "baseline"]
+    parts = {reg: [r for r in live if frame.rows[r.domain].get("region") == reg]
+             for reg in ("wisconsin", "comparison")}
+    if not all(parts.values()):
+        return ["## RQ6 - Wisconsin vs. comparison states", "",
+                "Needs live readings from both regions.", ""]
+    L = ["## RQ6 - Wisconsin vs. comparison states (descriptive, matched day)", "",
+         "A(d) = patched / (patched + still exposed) in each region's cohort. The difference "
+         "is in percentage points. Entity rows are the primary analysis; host-cluster rows "
+         "guard against one provider's upgrade standing in for many entities. No test of "
+         "significance is reported here (plan §7.9).", ""]
+    for sc in (Scenario(), Scenario("host cluster (IP)", unit="ip")):
+        res = {reg: curve_by_day(parts[reg], region_frame(frame, reg), days, sc)
+               for reg in parts}
+        rows = []
+        for day in sorted(set(res["wisconsin"][1]) | set(res["comparison"][1])):
+            cells, shares = [], []
+            for reg in ("wisconsin", "comparison"):
+                c = res[reg][1].get(day)
+                if c is None:
+                    cells += ["–", "–"]
+                    shares.append(None)
+                    continue
+                sh = sup.share(c["patched"], c["denominator"])
+                cells += [sup.count(c["denominator"]), sh]
+                shares.append(100.0 * c["patched"] / c["denominator"]
+                              if sh.endswith("%") else None)
+            if any(res[reg][1].get(day) is None for reg in ("wisconsin", "comparison")):
+                diff = "–"
+            else:
+                diff = f"{shares[0] - shares[1]:+.0f}" if None not in shares else "§"
+            rows.append([str(day), *cells, diff])
+        L += [f"**Unit: {'entity' if sc.unit == 'entity' else 'host cluster (IP)'}**; cohorts: "
+              f"Wisconsin {sup.count(res['wisconsin'][0])}, comparison "
+              f"{sup.count(res['comparison'][0])}.", ""]
+        L += _table(["day", "WI denominator", "WI A(d)", "comparison denominator",
+                     "comparison A(d)", "WI - comparison (pp)"], rows) + [""]
     return L
 
 

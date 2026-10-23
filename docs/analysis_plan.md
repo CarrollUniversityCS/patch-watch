@@ -22,7 +22,7 @@ plan against what actually runs.
 | RQ3 | **Time to patch.** How is time to patch distributed (interval-censored), and how many entities stayed exposed at the end? | Speed, and the tail. |
 | RQ4 | **Who patches.** How much of the reaction is explained by shared hosting? Does adoption differ by entity type? | Small towns rarely patch their own servers, so the paper must not credit or blame the town for a hosting provider's upgrade. |
 | RQ5 | **Usual vs. emergency.** How did the same population adopt an earlier critical PHP fix (CVE-2024-4577, June 2024)? | Says whether the PHP2Shell response was unusual. Archived data only. |
-| RQ6 | **Wisconsin vs. neighbours** [D6]. Do Minnesota, Illinois, Michigan and Iowa .gov entities differ on RQ1–RQ3? | Makes "Wisconsin was fast or slow" a comparison rather than an adjective. |
+| RQ6 | **Wisconsin vs. neighbours** (secondary; D6 decided). Do Minnesota, Illinois, Michigan and Iowa .gov entities differ on RQ1–RQ3? | Makes "Wisconsin was fast or slow" a comparison rather than an adjective. Live data from these weeks cannot be collected later. |
 
 **Not asked, and not claimed:** whether any site is exploitable or compromised; any ranking
 or naming of entities, vendors or hosting providers; anything about non-.gov sites.
@@ -159,15 +159,17 @@ analysis 5 switches it off.
 | Phase | When | Notes |
 |---|---|---|
 | Archived | Any time | Common Crawl, 2026 and 2024 sets, Wisconsin first, then comparison states. No traffic to sites. |
+| Region order | Every snapshot day | **Two separate runs, chained:** Wisconsin at 09:00, then the comparison states as soon as it exits cleanly (`--region`). A kill-switch trip, abuse flag or complaint during the comparison run can never cost a Wisconsin reading. A Wisconsin halt skips that day's comparison run. The runs never overlap, because `pipeline.RunLock` allows one live run at a time; overlap would put two requests on a shared-hosting IP (rule 4). |
 | S1 | As soon as Gate A opens | Every day before S1 loses the earliest part of the reaction. |
 | Daily | S1 through d = 14 | One snapshot a day, 09:00 America/Chicago. |
 | Tapering | d = 21, 28, 45, 60, 90 | |
-| Stop | d = 90, or earlier if no entity is EXPOSED for two consecutive snapshots | |
+| Stop | d = 90, or earlier if no Wisconsin entity is EXPOSED for two consecutive snapshots | Both regions stop together, on the Wisconsin schedule. |
 
-At most 22 live snapshots [D3].
+At most 22 snapshot days [D3], each with one Wisconsin run and one comparison run.
 
 **Volume.** About 833 homepage requests per Wisconsin snapshot, one per domain in the
-normal case. Live comparison states would add 1,961 (MN 621, IL 467, MI 643, IA 230) [D6]. The hard per-domain
+normal case, plus 1,961 for the comparison run (MN 621, IL 467, MI 643, IA 230) [D6]. That is
+2,794 sites a day in total, but each site still gets the same one request. The hard per-domain
 ceiling (3 phases × 4 hops = 12), the kill switch, the per-IP limit and the blocklist are
 unchanged.
 
@@ -249,10 +251,19 @@ patched among them, with the crawl's median day from the fix. The PHP2Shell curv
 (§7.3) and this curve are shown on the same day axis. They differ in resolution (daily
 vs. monthly), and the paper says so.
 
-### 7.9 RQ6: comparison states [D6]
-Built with `wi_frame.py build --comparison MN,IL,MI,IA`. The report repeats §7.1–7.7 per
-region. Any comparison is descriptive: difference in A(d) at matched days, with host
-clusters as the unit for any test, labelled exploratory. If Wisconsin-specific alerts
+### 7.9 RQ6: comparison states (secondary; D6 decided 2026-10-23)
+Built with `wi_frame.py build --comparison MN,IL,MI,IA` and snapshotted live in separate
+runs (§6). The report repeats §7.1–7.7 per region and adds one RQ6 table
+(`analyze._rq6`):
+- A(d) for each region's own cohort, matched on **whole day from t0**, not on run. The two
+  runs are minutes apart, so the same day is the fair match.
+- The Wisconsin − comparison difference in percentage points.
+- The whole table repeated with the host cluster (IP) as the unit, so one provider's
+  upgrade cannot pass for a regional difference.
+
+The comparison is descriptive. If a test is ever reported, it is at cluster level and
+labelled exploratory. The comparison states are pooled; per-state results are
+exploratory. Small per-state, per-stratum cells would fall under suppression anyway. If Wisconsin-specific alerts
 (Wisconsin Cyber Response Team, WI DOA, League of Wisconsin Municipalities, Wisconsin
 Counties Association) can be dated from public announcements, the curves are annotated at
 those dates. No causal claim is made from them.
@@ -317,7 +328,7 @@ those dates. No causal claim is made from them.
 | D3 | Approve the §6 schedule (up to 22 snapshots) in place of "A, B, no third"? | Default: approve. The IRB precondition is met. |
 | D4 | Pre-publication notice to WI CRT / MS-ISAC, aggregate only, 30-day embargo | Default: yes. |
 | D5 | Suppression threshold | Default: fewer than 10. |
-| D6 | Comparison states | Default: **archived data (passive) for MN, IL, MI, IA now.** Live comparison snapshots are the PI's call: the IRB determination is not population-specific, but they more than double the traffic. |
+| D6 | Comparison states | **Decided 2026-10-23: live, as a secondary aim, in separate runs** (§6, §7.9), plus archived data. Reason: the live readings cannot be collected after the fact, and each site's burden is unchanged. |
 
 ## 12. Deviation log
 

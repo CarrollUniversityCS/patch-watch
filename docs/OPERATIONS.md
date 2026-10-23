@@ -42,8 +42,20 @@ filled in before any live request can happen.
 
 # the real thing, after Gate A (Windows: `set PATCHWATCH_GATE_A=APPROVED`)
 export PATCHWATCH_GATE_A=APPROVED
-.venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_S1
+.venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label WI_S1
+# then, once that has finished cleanly, as its own run
+.venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label CMP_S1
 ```
+
+**Always run the two regions separately and one after the other** (`--region`). Wisconsin
+is the primary data and runs first. Never run them at the same time: `pipeline.RunLock`
+(`logs/run.lock`) refuses a second live run while one is going, because two processes
+would each allow one request per IP, which makes two. If a crash leaves the lock behind,
+confirm no run is going and delete it. The comparison states (MN, IL, MI, IA) are a secondary aim. If something goes
+wrong in their run (a kill-switch trip, a complaint, the abuse flag), Wisconsin's
+readings for the day are already committed and untouched. A complaint from a
+comparison-state operator is handled exactly like any other: blocklist it, and drop the
+flag if needed.
 
 The Wisconsin study runs on `data/wi_frame.csv` (`src/wi_frame.py build`). Any sample
 file is filtered at load: rows whose type or stratum starts with "Tribal" never load

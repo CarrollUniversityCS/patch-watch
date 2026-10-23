@@ -47,7 +47,7 @@ sites hide it, and distros can backport a fix without changing the version strin
 | `src/pipeline.py` | One snapshot end to end: preflight → fetch → classify → store → diff → audit → summary. |
 | `scripts/run_snapshot.py` | The wrapper a cron line calls. |
 | `scripts/cron.disabled` | The schedule, deliberately commented out (Stage 4 says install it disabled). |
-| `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 365 at 2026-10-23). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
+| `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 372 at 2026-10-23). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
 | `data/` | Frame, sample, database, ledger exports — gitignored. See `data/README.md`. |
 | `docs/` | `analysis_plan.md` (the pre-registration), `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out notice, to be published as the GitHub profile README that `PROJECT_URL` and the user agent point at), `IRB_INQUIRY_NOTE.md` and `IRB_DETERMINATION.md`. |
 | `requirements.txt` | Exact dependency versions. httpx is pinned on purpose (no-cookie guarantee). |
@@ -74,8 +74,9 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -X utf8 src/pipeline.py --mock --limit 20 --db data/mock_smoke.db --label SMOKE1
 .venv/bin/python -X utf8 src/pipeline.py --mock --preflight-only --sample data/wi_frame.csv
 
-# 4. live (refuses until Gate A opens)
-.venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_S1
+# 4. live (refuses until Gate A opens): two separate runs a day, Wisconsin first
+.venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label WI_S1
+.venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label CMP_S1
 
 # 5. the pre-registered analysis (suppressed; --unsuppressed writes to data/ for the PI)
 .venv/bin/python -X utf8 src/analyze.py --label WI_d14

@@ -13,8 +13,9 @@ agent at your firewall or WAF. We honour that too: a site that refuses us is rec
 
 Carroll University (Waukesha, Wisconsin) is measuring how quickly Wisconsin local and
 state government websites on .gov update one piece of software, the PHP scripting
-language, after a security fix is published. Sites in Minnesota, Illinois, Michigan and
-Iowa may be included for comparison.
+language, after a security fix is published. Minnesota, Illinois, Michigan and Iowa .gov
+sites are included for comparison, so the study can say whether Wisconsin's response was
+typical. They receive exactly the same single request a day.
 
 We start with the fix released on October 21, 2026 (PHP2Shell, CVE-2026-109618 and
 CVE-2026-109619). Site operators are not named or ranked individually. The report is

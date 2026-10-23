@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import csv
 import itertools
 import json
@@ -175,8 +176,9 @@ async def capture(conn: db.sqlite3.Connection, *, sample_rows: list[dict[str, st
                   url_for: Callable[[str], str] | None = None,
                   test_hosts: Iterable[str] = (),
                   mock: bool = False,
-                  timeouts: tuple[float, float] | None = None) -> dict[str, Any]:
-    """Fetch, classify, store, diff. One snapshot."""
+                  timeouts: tuple[float, float] | None = None,
+                  region: str | None = None) -> dict[str, Any]:
+    """Fetch, classify, store, diff. One snapshot (of one region, when given)."""
     domains = [r["domain"] for r in sample_rows]
     started = db.utc_now_iso()
 
@@ -202,7 +204,7 @@ async def capture(conn: db.sqlite3.Connection, *, sample_rows: list[dict[str, st
             "connect_timeout_s": crawler.connect_timeout, "total_timeout_s": crawler.total_timeout,
             "max_body_bytes": config.MAX_BODY_BYTES, "max_redirects": config.MAX_REDIRECTS,
             "cookie_jar": config.COOKIE_JAR, "mock": bool(test_hosts),
-            "blocklist_size": len(blocklist),
+            "blocklist_size": len(blocklist), "region": region,
         }, sort_keys=True),
         "notes": "mock loopback run" if test_hosts else "live run",
     })
@@ -255,6 +257,7 @@ async def capture(conn: db.sqlite3.Connection, *, sample_rows: list[dict[str, st
         "flapping_domains": len(flapping), "kill_switch": tripped,
         "audit_problems": audit_problems,
         "ledger": ledger, "observations": observations, "mock": bool(test_hosts),
+        "region": region,
     }
 
 
@@ -286,7 +289,8 @@ def run_markdown(summary: dict[str, Any]) -> str:
         f"# Run {summary['run_id']}",
         "",
         f"- snapshot label: `{summary['snapshot_label']}`"
-        f"{' (MOCK, loopback only)' if summary['mock'] else ''}",
+        f"{' (MOCK, loopback only)' if summary['mock'] else ''}"
+        f"{' | region: ' + summary['region'] if summary.get('region') else ''}",
         f"- started / finished (UTC): {summary['started_at_utc']} / {summary['finished_at_utc']}",
         f"- domains in sample: {summary['domains']}  |  responded {summary['responded']}"
         f"  |  errored {summary['errors']}  |  skipped {summary['skipped']}",
@@ -369,17 +373,65 @@ def attach_logging(log_dir: Path | None = None) -> logging.Handler | None:
     return handler
 
 
+def select_region(rows: list[dict[str, str]], region: str | None) -> list[dict[str, str]]:
+    """Keep one frame region (plan §6: Wisconsin and the comparison states are separate
+    snapshots, so a halt or complaint during the comparison run can never cost a
+    Wisconsin reading). A sample with no region column cannot be split; refuse."""
+    if not region:
+        return rows
+    if not any("region" in r for r in rows):
+        raise SystemExit(f"--region {region}: the sample has no region column "
+                         "(build it with src/wi_frame.py)")
+    return [r for r in rows if r.get("region") == region]
+
+
+class RunLock:
+    """At most one LIVE run at a time on this machine.
+
+    Rule 4 caps us at one request in flight per resolved IP, and that cap lives inside
+    one process. Two overlapping runs (Wisconsin still going when the comparison run
+    starts, or a manual run during a scheduled one) would each hold their own cap and
+    put two requests on a shared-hosting IP. The lock is a file created with O_EXCL; a
+    leftover one after a crash is a refusal, not something to guess about. Read
+    it, confirm no run is going, and delete it.
+    """
+
+    def __init__(self, path: Path | None = None):
+        self.path = Path(path or (config.LOGS_DIR / "run.lock"))
+        self.held = False
+
+    def __enter__(self) -> "RunLock":
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            held_by = self.path.read_text(encoding="utf-8", errors="replace").strip()
+            raise SystemExit(f"another live run holds {self.path} ({held_by}). Two live runs "
+                             "at once would break the one-request-per-IP limit (rule 4). If no "
+                             "run is going, the lock is stale from a crash: delete it.")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(f"pid={os.getpid()} started={db.utc_now_iso()}\n")
+        self.held = True
+        return self
+
+    def __exit__(self, *exc) -> None:
+        if self.held:
+            self.path.unlink(missing_ok=True)
+            self.held = False
+
+
 def run_snapshot(*, sample_path: Path | str | None = None, db_path: Path | str | None = None,
                  blocklist_path: Path | str | None = None, snapshot_label: str = "",
                  run_id: str | None = None, limit: int | None = None,
-                 mock: bool = False, mock_rotate: int = 0, quiet: bool = False) -> dict[str, Any]:
+                 mock: bool = False, mock_rotate: int = 0, quiet: bool = False,
+                 region: str | None = None) -> dict[str, Any]:
     """Synchronous entry point used by scripts/run_snapshot.py and the cron snippet."""
     attach_logging()
     sample_path = Path(sample_path or (config.DATA_DIR / "pilot_sample.csv"))
     db_path = Path(db_path or config.DB_PATH)
     blocklist_path = Path(blocklist_path or config.BLOCKLIST_PATH)
 
-    sample_rows = load_sample(sample_path)
+    sample_rows = select_region(load_sample(sample_path), region)
     if limit:
         sample_rows = sample_rows[:limit]
     blocklist = fetch.load_blocklist(blocklist_path)
@@ -414,23 +466,27 @@ def run_snapshot(*, sample_path: Path | str | None = None, db_path: Path | str |
             next(cycle)
         url_for = lambda dom: stack.url_for(next(cycle))  # noqa: E731 - one-liner on purpose
 
-    conn = db.connect(db_path)
-    db.init_db(conn)
-    db.upsert_domains(conn, sample_rows)
-    try:
-        summary = asyncio.run(capture(
-            conn, sample_rows=sample_rows, run_id=run_id or new_run_id(snapshot_label),
-            snapshot_label=snapshot_label or "adhoc", blocklist=blocklist,
-            url_for=url_for, test_hosts=test_hosts or (), mock=mock,
-            timeouts=(1.0, 3.0) if mock else None))
-        summary["ledger_csv"] = str(export_ledger(
-            summary["ledger"].rows,
-            config.DATA_DIR / f"ledger_{summary['run_id']}.csv"))
-        summary["run_log"] = str(write_run_log(summary))
-    finally:
-        conn.close()
-        if stack is not None:
-            stack.stop()
+    # Mock runs touch only loopback, so they need no lock and may run beside a live one.
+    with (RunLock() if not mock else contextlib.nullcontext()):
+        try:
+            conn = db.connect(db_path)
+            db.init_db(conn)
+            db.upsert_domains(conn, sample_rows)
+            try:
+                summary = asyncio.run(capture(
+                    conn, sample_rows=sample_rows, run_id=run_id or new_run_id(snapshot_label),
+                    snapshot_label=snapshot_label or "adhoc", blocklist=blocklist,
+                    url_for=url_for, test_hosts=test_hosts or (), mock=mock,
+                    timeouts=(1.0, 3.0) if mock else None, region=region))
+                summary["ledger_csv"] = str(export_ledger(
+                    summary["ledger"].rows,
+                    config.DATA_DIR / f"ledger_{summary['run_id']}.csv"))
+                summary["run_log"] = str(write_run_log(summary))
+            finally:
+                conn.close()
+        finally:
+            if stack is not None:
+                stack.stop()
 
     if not quiet:
         print(json.dumps({k: v for k, v in summary.items()
@@ -448,6 +504,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--label", default="", help="snapshot label, e.g. A_day1")
     ap.add_argument("--run-id", help="override the generated run id")
     ap.add_argument("--limit", type=int, help="only the first N domains (smoke test)")
+    ap.add_argument("--region", choices=("wisconsin", "comparison"),
+                    help="snapshot one frame region only (plan §6: always run them separately)")
     ap.add_argument("--mock", action="store_true",
                     help="loopback mock server only - no DNS, no real domain, gate not required")
     ap.add_argument("--mock-rotate", type=int, default=0,
@@ -457,7 +515,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     if args.preflight_only:
-        rows = load_sample(Path(args.sample or (config.DATA_DIR / "pilot_sample.csv")))
+        rows = select_region(load_sample(Path(args.sample or (config.DATA_DIR / "pilot_sample.csv"))),
+                             args.region)
         bl_path = Path(args.blocklist or config.BLOCKLIST_PATH)
         probs = preflight(sample_rows=rows, blocklist=fetch.load_blocklist(bl_path),
                           blocklist_path=bl_path, db_path=Path(args.db or config.DB_PATH),
@@ -467,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
 
     s = run_snapshot(sample_path=args.sample, db_path=args.db, blocklist_path=args.blocklist,
                      snapshot_label=args.label, run_id=args.run_id, limit=args.limit,
-                     mock=args.mock, mock_rotate=args.mock_rotate)
+                     mock=args.mock, mock_rotate=args.mock_rotate, region=args.region)
     return 2 if (s["kill_switch"] or s["audit_problems"]) else 0
 
 

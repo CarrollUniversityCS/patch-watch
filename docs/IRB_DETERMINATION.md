@@ -24,11 +24,24 @@ matches what runs. That costs one email, and it keeps a later reader from findin
 
 | Told to the IRB | Current design (`docs/analysis_plan.md`) |
 |---|---|
-| ~300 domains from the national registry, including tribal governments | Wisconsin census of 833 domains; MN, IL, MI and IA optional as a comparison; **tribal nations excluded** |
+| ~300 domains from the national registry, including tribal governments | Wisconsin census of 833 domains, plus 1,961 comparison domains in MN, IL, MI and IA (separate daily run); **tribal nations excluded** |
 | At most twice per day | Once a day for about 14 days, then days 21, 28, 45, 60 and 90 (up to 22 snapshots) |
 | One ordinary GET per homepage | Usually one. At most three request phases a day (certificate retry, plain-HTTP fallback), each followed by up to 3 same-site redirect hops: a hard ceiling of 12 |
 | (not mentioned) | Archived headers from Common Crawl's public archive, with no traffic to sites |
 | User agent points to `https://github.com/JForden/JForden/blob/main/README.md` | The user agent carries `https://github.com/JForden/JForden`. Both show the same profile README; no change needed |
+
+## Draft update to send the IRB (the PI sends it; nothing has been sent)
+
+> Thank you for the determination. For your records, the final design differs from my
+> inquiry in scope, though not in kind. It covers all Wisconsin state and local .gov
+> websites (833), plus 1,961 in Minnesota, Illinois, Michigan and Iowa for comparison,
+> rather than about 300 national sites. Tribal government sites are excluded. Each site
+> receives one ordinary homepage request a day, occasionally two or three if the first
+> fails, with redirects followed within the same site. That happens daily for about two
+> weeks and then on five later days, up to 90 days after the fix. I also read archived
+> copies of the same homepages from Common Crawl's public web archive, which sends no
+> traffic to the sites. No people are contacted. If I later propose notifying site
+> contacts or surveying staff, I will submit a full application first.
 
 ## What still needs IRB action
 

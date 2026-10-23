@@ -16,6 +16,12 @@
 # these lines. The dated lines below are exact days, so they cannot drift into a
 # 23rd run.
 #
+# Two runs per day (plan §6, D6), chained on one line: Wisconsin first; the comparison
+# states start only when it has finished and exited 0 (`&&`). Separate processes, so a
+# halt or complaint in the comparison run cannot cost a Wisconsin reading. A Wisconsin
+# kill-switch trip (exit 2) skips that day's comparison run. They never overlap:
+# pipeline.RunLock refuses a second concurrent live run (rule 4, one request per IP).
+#
 # Local time on this machine is Central (America/Chicago); cron uses local time, and
 # all timestamps in the database are stored in UTC. Put a line `PW=/path/to/patch-watch`
 # at the top of the crontab; the entries below use it.
@@ -25,15 +31,15 @@
 #
 # ── live daily snapshot, S1 .. day 14 = 2026-11-04 (DO NOT UNCOMMENT BEFORE GATE A) ─
 # Set the start day to the actual S1 date when Gate A opens.
-# 0 9 24-31 10 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
-# 0 9 1-4 11 *    cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
+# 0 9 24-31 10 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label "CMP_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
+# 0 9 1-4 11 *    cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label "CMP_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
 #
 # ── tapering: day 21 (11-11), 28 (11-18), 45 (12-05), 60 (12-20), 90 (2027-01-19) ───
-# 0 9 11 11 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d21 >> logs/cron.out 2>&1
-# 0 9 18 11 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d28 >> logs/cron.out 2>&1
-# 0 9 5 12 *   cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d45 >> logs/cron.out 2>&1
-# 0 9 20 12 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d60 >> logs/cron.out 2>&1
-# 0 9 19 1 *   cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d90 >> logs/cron.out 2>&1
+# 0 9 11 11 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label WI_d21 >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label CMP_d21 >> logs/cron.out 2>&1
+# 0 9 18 11 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label WI_d28 >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label CMP_d28 >> logs/cron.out 2>&1
+# 0 9 5 12 *   cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label WI_d45 >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label CMP_d45 >> logs/cron.out 2>&1
+# 0 9 20 12 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label WI_d60 >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label CMP_d60 >> logs/cron.out 2>&1
+# 0 9 19 1 *   cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label WI_d90 >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label CMP_d90 >> logs/cron.out 2>&1
 #
 # Stop everything immediately, without editing this file:
 #   echo "ABUSE_COMPLAINT automated scan traffic, stop now" > logs/abuse.flag
