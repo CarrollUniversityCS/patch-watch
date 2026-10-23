@@ -1,0 +1,30 @@
+# Exact versions the suite passed against (Python 3.14.5, 2026-10-23).
+# httpx is pinned on purpose: the no-cookie guarantee depends on 0.28.1's
+# cookie-jar behaviour (docs/OPERATIONS.md, "Maintenance trap"). If you upgrade it,
+# run tests/test_fetch_rules.py's no-cookie test first.
+#
+#   python -m venv .venv
+#   .venv/bin/pip install -r requirements.txt        (Windows: .venv\Scripts\pip)
+#   .venv/bin/python -X utf8 -m pytest -q
+
+# runtime
+httpx==0.28.1
+httpcore==1.0.9
+anyio==4.15.1
+h11==0.16.0
+certifi==2026.10.23
+idna==3.20
+pandas==3.1.0
+numpy==2.5.4
+python-dateutil==3.0.0
+tzdata==2026.5
+
+# tests (cryptography generates the mock rig's self-signed cert when openssl is absent)
+pytest==9.1.1
+iniconfig==2.3.1
+pluggy==1.7.0
+packaging==26.3
+Pygments==2.21.0
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.12
