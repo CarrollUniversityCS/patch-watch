@@ -24,3 +24,6 @@ __pycache__/
 
 # Local TLS material for the mock server (self-signed cert + key, regenerated on demand)
 tests/fixtures/
+
+# Database backups made by the operator (docs/HERMES_RUNBOOK.md §5.4): study data, never committed
+backups/
