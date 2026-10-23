@@ -138,8 +138,9 @@ below came from the loopback rig in `tests/mock_server.py`.
   domains / 1,978-row full dataset" (no such file exists — the frame is 15,614 and the
   sample is 319), "nine classes including `AMBIGUOUS`" (there are eight; ambiguity lives in
   the reason/detail fields, e.g. `suffix_ambiguous`), "300+ tests" (257).
-- **My `pipeline.py` docstring said Gate A needs the config flag *and* the env var. It
-  needs either.** Docstring corrected to match the code.
+- ~~My `pipeline.py` docstring said Gate A needs the config flag *and* the env var. It
+  needs either.~~ **Superseded by `eca4efd`:** Gate A now needs BOTH, and the docstring
+  says so (see "Gate A safeguard" below).
 - **"`300+ tests`" was wrong twice over.** It was 257 when I fixed it this morning and it is
   **303** now; the number in this document is the suite at the time of writing, so re-count
   rather than quoting it.

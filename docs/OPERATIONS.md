@@ -38,21 +38,32 @@ filled in before any live request can happen.
 
 ```bash
 # mock, 20 domains, throwaway database
-.venv/Scripts/python.exe -X utf8 src/pipeline.py --mock --limit 20 --db data/mock_smoke.db --label SMOKE1
+.venv/bin/python -X utf8 src/pipeline.py --mock --limit 20 --db data/mock_smoke.db --label SMOKE1
 
-# the real thing, after Gate A
-set PATCHWATCH_GATE_A=APPROVED
-.venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --label SNAP_A
+# the real thing, after Gate A (Windows: `set PATCHWATCH_GATE_A=APPROVED`)
+export PATCHWATCH_GATE_A=APPROVED
+.venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_S1
 ```
+
+The Wisconsin study runs on `data/wi_frame.csv` (`src/wi_frame.py build`). Any sample
+file is filtered at load: rows whose type or stratum starts with "Tribal" never load
+(`config.EXCLUDED_DOMAIN_TYPE_PREFIXES`). Preflight refuses a sample with no type
+columns, because then that filter could not be checked.
 
 Useful flags: `--sample` (a different sample CSV), `--blocklist`, `--run-id`,
 `--mock-rotate N` (shift the mock deck so a second run in the same database produces
 genuine version changes, for exercising the change detector), `--preflight-only` (check
 everything and send nothing).
 
-The pilot protocol is snapshot A, then snapshot B at least six hours later, and **no
-third snapshot without Jack's approval**. `scripts/cron.disabled` carries the daily entry
-in commented form; Stage 4 requires it to stay commented.
+Schedule: `docs/analysis_plan.md` §6. Daily from S1 through day 14, then days 21, 28,
+45, 60 and 90 after the fix, at most 22 snapshots. That replaces the national pilot's
+"A, then B, no third", subject to the PI's decision D3. `scripts/cron.disabled` carries
+the schedule in commented form; it stays commented until Gate A.
+
+The archived baseline (`src/baseline_cc.py`) is not gated, because it never contacts a
+government host. It talks to Common Crawl only, enforced by `CCClient.check_host()`. It
+is slow by design (one request at a time, at least 1.5 s apart, with backoff), and it is
+resumable: re-run the same command after an interruption.
 
 ## What a run produces
 
@@ -75,24 +86,31 @@ malformed response cancel the other domains' work.
 ## Stopping it
 
 **Drop a file.** `logs/abuse.flag` (or whatever `PATCHWATCH_ABUSE_FLAG` points at)
-containing the marker `ABUSE_COMPLAINT`. Checked before the run starts, before DNS
-resolution of anything, and again between requests. Verified behaviour: the run is
-refused, nothing is written, no database file is created.
+containing the marker `ABUSE_COMPLAINT`. It is checked before the run starts (before
+any DNS resolution) and again before every domain, so dropping it mid-run stops every
+request not yet sent. That per-domain check was added 2026-10-23 (audit C5); before then
+the flag was read only at start. Verified behaviour: a run started with the flag present
+is refused, nothing is written, and no database file is created. A flag dropped mid-run
+turns every remaining domain into `halted` / `NOT_MEASURED` with no request sent
+(`tests/test_fetch_rules.py::test_c5_…`).
 
 ```bash
 echo "ABUSE_COMPLAINT automated scan traffic, stop now" > logs/abuse.flag
 ```
 
-An opt-out email is a two-step action: put the domain in `blocklist.txt` (applied before
-the next snapshot), then drop the flag if the traffic needs to stop *now* rather than in
-six hours.
+An opt-out email (to jforden@carrollu.edu) is a two-step action:
+1. Put the domain in `blocklist.local.txt`. It is gitignored, because the list of who
+   opted out is itself a disclosure, and it is read alongside `blocklist.txt` before
+   every run.
+2. If the traffic needs to stop *now* rather than at the next snapshot, drop the flag.
 
 ## Self-halts (kill switch, hard rule 6)
 
 The run stops itself and says why if:
 
-- more than 10% of a rolling window of 50 responses are 403, 429 or 5xx (`KillSwitch.bad()`
-  counts `status >= 500`, so 5xx is included);
+- more than 10% of a rolling window of 50 phase outcomes are 403, 429 or 5xx. An outcome
+  is one per budget-charged phase; redirect hops inside a phase are not separate entries.
+  `KillSwitch.bad()` counts `status >= 500`, so 5xx is included;
 - an abuse/complaint marker appears on disk;
 - the post-run ledger audit cannot be reconciled against rule 2 (see below).
 
@@ -167,10 +185,14 @@ named thing and re-run; nothing was sent.
 committed, and the reason is in `reports/run_*.md` (and `ALERT_*.md`) and `logs/capture.log`. Export the ledger
 CSV before doing anything else; that is the record of exactly how far it got.
 
-**"Someone emailed about this study"** — add the domain to `blocklist.txt`, note the
-request in `logs/optouts.md` (never in the blocklist file itself, never in a report), and
-if it is an abuse complaint drop the flag too. Opt-out is honoured on the strength of the
-request alone.
+**"Someone emailed about this study"**:
+1. Add the domain to `blocklist.local.txt`.
+2. Note the request in `logs/optouts.md`. Never note it in a committed file, and never
+   in a report.
+3. If it is an abuse complaint, drop the flag too.
+
+Opt-out is honoured on the strength of the request alone. Opted-out domains are
+classified `NOT_MEASURED` and never counted as unreachable.
 
 **A crashed run** — the ledger survives (committed early) but the CSV export and summary
 happen later, so re-export from the database rather than trusting that a `data/ledger_*.csv`

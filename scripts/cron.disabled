@@ -1,30 +1,41 @@
-# Stage 4 scheduler entry — INTENTIONALLY DISABLED. Hard rule 8 (Gate A).
+# Scheduler entries: INTENTIONALLY DISABLED. Hard rule 8 (Gate A).
 #
 # Nothing here runs. Every line is a comment; `crontab -l` shows no patch-watch entry.
-# Uncommenting this installs live traffic, which requires all three of:
-#   1. Jack's message "GATE A APPROVED" (Gate A itself; src/config.py or the env marker
-#      is the mechanical switch, the message is the authorisation — see docs/OPERATIONS.md
-#      for the difference between what the code checks and what the rule means);
-#   2. the project page live and the User-Agent placeholders filled in
-#      (assert_live_allowed() refuses on `[PROJECT_URL]` / `[CONTACT_EMAIL]`);
-#   3. IRB/IT determination received (docs/IRB_INQUIRY_NOTE.md).
+# Uncommenting a live line installs live traffic, which requires all of the following:
+#   1. Jack's message "GATE A APPROVED". Gate A itself is the two-key check: the
+#      LIVE_REQUESTS_ENABLED flag in src/config.py AND PATCHWATCH_GATE_A=APPROVED in the
+#      environment. The message is the authorisation; see docs/OPERATIONS.md.
+#   2. The notice (docs/project_page.md) published as the README at PROJECT_URL, with the
+#      opt-out address jforden@carrollu.edu.
+#   3. The IRB determination: RECEIVED 2026-10-23, not human-subjects research
+#      (docs/IRB_DETERMINATION.md). Carroll IT informed.
+#   4. docs/analysis_plan.md frozen (title commit "analysis plan v1.0 (frozen)").
 #
-# The pilot protocol is snapshot A, then snapshot B at least six hours later, and no
-# third snapshot without Jack's approval — so a daily entry is what the study BECOMES,
-# not what the pilot runs. Keep it disabled through the pilot.
+# Schedule (analysis plan §6, decision D3): daily from S1 through day 14 after the fix
+# (2026-10-21), then days 21, 28, 45, 60 and 90; at most 22 snapshots, then remove
+# these lines. The dated lines below are exact days, so they cannot drift into a
+# 23rd run.
 #
-# Local time on this machine is Central Daylight Time (UTC-5); cron uses local time, and
-# all timestamps in the database are stored in UTC.
+# Local time on this machine is Central (America/Chicago); cron uses local time, and
+# all timestamps in the database are stored in UTC. Put a line `PW=/path/to/patch-watch`
+# at the top of the crontab; the entries below use it.
 #
 # ── rehearsal (no network at all; safe to enable today) ────────────────────────────
-# 0 4 * * 0   cd /c/Users/jforden/Desktop/repos/patch-watch && .venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --mock --label MOCK_WEEKLY >> logs/cron.out 2>&1
+# 0 4 * * 0   cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --mock --label MOCK_WEEKLY >> logs/cron.out 2>&1
 #
-# ── live daily snapshot (DO NOT UNCOMMENT BEFORE GATE A) ────────────────────────────
-# 0 9 * * *   cd /c/Users/jforden/Desktop/repos/patch-watch && .venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --label "SNAP_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
+# ── live daily snapshot, S1 .. day 14 = 2026-11-04 (DO NOT UNCOMMENT BEFORE GATE A) ─
+# Set the start day to the actual S1 date when Gate A opens.
+# 0 9 24-31 10 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
+# 0 9 1-4 11 *    cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
 #
-# ── the pilot's second snapshot, >=6h after the first (DO NOT UNCOMMENT BEFORE GATE A) ─
-# 30 15 * * * cd /c/Users/jforden/Desktop/repos/patch-watch && .venv/Scripts/python.exe -X utf8 scripts/run_snapshot.py --label "SNAP_B_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
+# ── tapering: day 21 (11-11), 28 (11-18), 45 (12-05), 60 (12-20), 90 (2027-01-19) ───
+# 0 9 11 11 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d21 >> logs/cron.out 2>&1
+# 0 9 18 11 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d28 >> logs/cron.out 2>&1
+# 0 9 5 12 *   cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d45 >> logs/cron.out 2>&1
+# 0 9 20 12 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d60 >> logs/cron.out 2>&1
+# 0 9 19 1 *   cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --label WI_d90 >> logs/cron.out 2>&1
 #
 # Stop everything immediately, without editing this file:
 #   echo "ABUSE_COMPLAINT automated scan traffic, stop now" > logs/abuse.flag
-# Every run refuses while that marker is on disk, before any name is resolved.
+# Every run refuses while that marker is on disk, and a run in progress stops before
+# its next domain.

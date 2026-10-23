@@ -2,8 +2,9 @@
 
 **From:** Jack Forden, Assistant Professor, Computer Science & AI, Carroll University
 **Re:** Request for a determination on a passive web-traffic measurement study
-**Status:** Requesting a determination. No live measurement traffic has been sent to any
-government website as of the date of this note.
+**Status:** ANSWERED 2026-10-23: not human-subjects research, no review needed. See
+`docs/IRB_DETERMINATION.md`, which also lists where the current Wisconsin design differs
+from this note. This note is kept unchanged as the record of what was asked.
 
 ## What the project does
 
