@@ -28,6 +28,7 @@ matches what runs. That costs one email, and it keeps a later reader from findin
 | At most twice per day | Once a day for about 14 days, then days 21, 28, 45, 60 and 90 (up to 22 snapshots) |
 | One ordinary GET per homepage | Usually one. At most three request phases a day (certificate retry, plain-HTTP fallback), each followed by up to 3 same-site redirect hops: a hard ceiling of 12 |
 | (not mentioned) | Archived headers from Common Crawl's public archive, with no traffic to sites |
+| Halts itself if more than 10% of a rolling 50 are errors, blocks or rate limits | Halts on more than 10% rate limits or server errors (overload), or more than 30% refusals (blocked broadly). An isolated firewall refusal is honoured for that site without stopping the run. Changed 2026-10-23 after firewall 403s alone halted the first run (plan §12) |
 | User agent points to `https://github.com/JForden/JForden/blob/main/README.md` | The user agent carries `https://github.com/JForden/JForden`. Both show the same profile README; no change needed |
 
 ## Draft update to send the IRB (the PI sends it; nothing has been sent)
@@ -40,7 +41,10 @@ matches what runs. That costs one email, and it keeps a later reader from findin
 > fails, with redirects followed within the same site. That happens daily for about two
 > weeks and then on five later days, up to 90 days after the fix. I also read archived
 > copies of the same homepages from Common Crawl's public web archive, which sends no
-> traffic to the sites. No people are contacted. If I later propose notifying site
+> traffic to the sites. The crawler still halts itself on signs of load (more than 10%
+> rate-limit or server-error responses) and now separately on broad refusal (more than
+> 30% "forbidden" responses). An isolated firewall refusal is simply recorded as "not
+> measured" for that site. No people are contacted. If I later propose notifying site
 > contacts or surveying staff, I will submit a full application first.
 
 ## What still needs IRB action

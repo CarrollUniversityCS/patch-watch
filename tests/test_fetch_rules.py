@@ -371,7 +371,7 @@ def test_rule5_blocklist_is_matched_after_case_folding(mock_stack):
 
 # ========================================================================= rule 6
 def test_rule6_what_counts_as_bad_traffic():
-    assert fetch.KillSwitch.bad(403, None) is True
+    # overload signals
     assert fetch.KillSwitch.bad(429, None) is True
     assert fetch.KillSwitch.bad(500, None) is True
     assert fetch.KillSwitch.bad(503, None) is True
@@ -379,6 +379,38 @@ def test_rule6_what_counts_as_bad_traffic():
     assert fetch.KillSwitch.bad(404, None) is False
     assert fetch.KillSwitch.bad(None, "timeout") is False, \
         "a timeout is our network, not their objection; counting it would halt on us"
+    # a refusal is a block signal, not an overload signal (plan §12, 2026-10-23)
+    assert fetch.KillSwitch.bad(403, None) is False
+    assert fetch.KillSwitch.blocked(403) is True and fetch.KillSwitch.blocked(401) is True
+    assert fetch.KillSwitch.blocked(429) is False and fetch.KillSwitch.blocked(200) is False
+
+
+def _window(statuses, tmp_path, **kw):
+    async def main():
+        ks = fetch.KillSwitch(window=50, abuse_flag=tmp_path / "none.flag", **kw)
+        for st in statuses:
+            await ks.record(st, None)
+        return ks
+    return asyncio.run(main())
+
+
+def test_rule6_cdn_403s_at_the_observed_rate_do_not_halt(tmp_path):
+    """2026-10-23: 6 Cloudflare/Akamai 403s in 50 halted the first real snapshot."""
+    ks = _window([403] * 6 + [200] * 44, tmp_path)
+    assert ks.tripped is False
+    ks = _window([403] * 15 + [200] * 35, tmp_path)
+    assert ks.tripped is False, "30% exactly is not MORE than 30%"
+
+
+def test_rule6_broad_refusal_trips_the_block_rate(tmp_path):
+    ks = _window([403] * 16 + [200] * 34, tmp_path)
+    assert ks.tripped is True and "block rate" in ks.reason
+
+
+def test_rule6_overload_still_trips_at_ten_percent(tmp_path):
+    ks = _window([503] * 3 + [429] * 3 + [200] * 44, tmp_path)
+    assert ks.tripped is True and "overload" in ks.reason
+    assert _window([503] * 5 + [200] * 45, tmp_path).tripped is False
 
 
 def test_rule6_rolling_window_trips_above_the_ratio(tmp_path):

@@ -48,7 +48,7 @@ sites hide it, and distros can backport a fix without changing the version strin
 | `src/pipeline.py` | One snapshot end to end: preflight → fetch → classify → store → diff → audit → summary. |
 | `scripts/run_snapshot.py` | The wrapper a cron line calls. |
 | `scripts/cron.disabled` | The schedule, deliberately commented out (Stage 4 says install it disabled). |
-| `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 375 at 2026-10-23). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
+| `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 380 at 2026-10-23). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
 | `data/` | Frame, sample, database, ledger exports — gitignored. See `data/README.md`. |
 | `docs/` | `analysis_plan.md` (the pre-registration), `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out notice, to be published as the GitHub profile README that `PROJECT_URL` and the user agent point at), `IRB_INQUIRY_NOTE.md` and `IRB_DETERMINATION.md`. |
 | `requirements.txt` | Exact dependency versions. httpx is pinned on purpose (no-cookie guarantee). |
@@ -120,7 +120,7 @@ guessed at in either case.
 3. **Identify yourself** — declared user agent, never a browser impersonation.
 4. **Rate limits** — 20 concurrent overall, 1 per resolved IP, 0.1–0.5 s jitter, 10 s/20 s timeouts, back off on 429/503.
 5. **Opt-out**: requests to jforden@carrollu.edu, honoured within 24 hours, no verification. `blocklist.txt` is loaded before every run. Tribal nations are excluded by design (`config.EXCLUDED_DOMAIN_TYPE_PREFIXES`).
-6. **Kill switch**: halt on more than 10% bad responses in a rolling 50, on any abuse complaint (the flag is re-read before every domain), or when the ledger cannot be reconciled with rule 2.
+6. **Kill switch**: halt when more than 10% of a rolling 50 outcomes are 429/5xx (overload) or more than 30% are 401/403 (blocked broadly), on any abuse complaint (the flag is re-read before every domain), or when the ledger cannot be reconciled with rule 2. Fetch order is shuffled per run with a recorded seed.
 7. **Data handling** — local only; per-domain results to the PI only; aggregate counts in reports.
 8. **Human gate** — no live request to a government domain before "GATE A APPROVED".
 9. **No guessing** — ambiguous means ambiguous, with the reason logged.

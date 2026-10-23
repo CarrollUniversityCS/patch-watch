@@ -18,10 +18,11 @@ in a comment:
                                jitter, 10 s connect / 20 s total, no retry on 429/503
   rule 5  opt-out              blocklist re-read at run start, skipped domains recorded
   rule 6  kill switch          rolling window of 50 phase outcomes (redirect hops
-                               are not separate entries), trips above 10%
-                               403/429/5xx; or if logs/abuse.flag appears (re-read
-                               before every domain); or if the ledger audit finds a
-                               budget violation
+                               are not separate entries): trips above 10% 429/5xx
+                               (overload) or above 30% 401/403 (blocked broadly);
+                               or if logs/abuse.flag appears (re-read before every
+                               domain); or if the ledger audit finds a budget
+                               violation
   rule 8  human gate           refuses to run unless GATE A is marked APPROVED and
                                the User-Agent carries no [PLACEHOLDER]
 
@@ -191,37 +192,66 @@ class ApprovedSet:
 
 # --------------------------------------------------------------------------- kill switch
 class KillSwitch:
-    """Rule 6. Rolling window over the most recent KILL_ROLLING_WINDOW requests."""
+    """Rule 6. Two trips over one rolling window of the most recent phase outcomes.
+
+    * overload: more than `ratio` (10%) of the window are 429 or 5xx - the signals that
+      we might be adding load;
+    * block: more than `block_ratio` (30%) of the window are 401/403 - our crawler is
+      being refused broadly, which needs a human to look before anything else is sent.
+
+    403 used to count toward the overload trip. Edge firewalls (Cloudflare, Akamai)
+    answer a non-browser client with 403 on first contact; at that base rate the
+    combined 10% rule halted the first real Wisconsin snapshot with no load signal at
+    all (plan §12, 2026-10-23). A refusal is honoured where it happens - the site is
+    NOT_MEASURED and not asked again that day - and only a broad pattern stops the run.
+    """
 
     def __init__(self, window: int | None = None, ratio: float | None = None,
-                 abuse_flag: Path | None = None):
+                 abuse_flag: Path | None = None, block_ratio: float | None = None):
         self.window = window or config.KILL_ROLLING_WINDOW
         self.ratio = ratio or config.KILL_TRIP_RATIO
+        self.block_ratio = block_ratio or config.KILL_BLOCK_RATIO
         self.abuse_flag = Path(abuse_flag or config.ABUSE_FLAG_PATH)
         self._recent: deque[bool] = deque(maxlen=self.window)
+        self._blocked: deque[bool] = deque(maxlen=self.window)
         self.tripped_reason: str | None = None
         self.lock = asyncio.Lock()
 
     @staticmethod
     def bad(status: int | None, error_type: str | None) -> bool:
+        """Overload signal: 429 or any 5xx. A timeout is our network, not their load."""
         if status in config.KILL_STATUS_CODES:
             return True
         if status is not None and status >= 500:
             return True
         return False
 
+    @staticmethod
+    def blocked(status: int | None) -> bool:
+        """Refusal signal: 401/403."""
+        return status in config.KILL_BLOCK_STATUS_CODES
+
     async def record(self, status: int | None, error_type: str | None) -> None:
         async with self.lock:
             self._recent.append(self.bad(status, error_type))
+            self._blocked.append(self.blocked(status))
             if len(self._recent) < self.window:
                 return
-            share = sum(self._recent) / len(self._recent)
+            n = len(self._recent)
+            share = sum(self._recent) / n
+            blocked = sum(self._blocked) / n
             if share > self.ratio:
                 self.tripped_reason = (
-                    f"kill switch: {share:.0%} of the last {len(self._recent)} requests returned "
-                    f"403/429/5xx (threshold {self.ratio:.0%})"
-                )
+                    f"kill switch (overload): {share:.0%} of the last {n} outcomes were "
+                    f"429/5xx (threshold {self.ratio:.0%})")
+            elif blocked > self.block_ratio:
+                self.tripped_reason = (
+                    f"kill switch (block rate): {blocked:.0%} of the last {n} outcomes were "
+                    f"401/403 (threshold {self.block_ratio:.0%}) - the crawler is being "
+                    f"refused broadly; find out why before sending anything else")
+            if self.tripped_reason:
                 self._recent.clear()
+                self._blocked.clear()
 
     def check_external(self) -> None:
         """Rule 6, second trigger: an operator-written abuse/complaint marker.

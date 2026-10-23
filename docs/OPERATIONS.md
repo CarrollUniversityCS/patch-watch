@@ -120,9 +120,19 @@ An opt-out email (to jforden@carrollu.edu) is a two-step action:
 
 The run stops itself and says why if:
 
-- more than 10% of a rolling window of 50 phase outcomes are 403, 429 or 5xx. An outcome
-  is one per budget-charged phase; redirect hops inside a phase are not separate entries.
-  `KillSwitch.bad()` counts `status >= 500`, so 5xx is included;
+- **Overload:** more than 10% of a rolling window of 50 phase outcomes are 429 or 5xx.
+  An outcome is one per budget-charged phase; redirect hops inside a phase are not
+  separate entries. `KillSwitch.bad()` counts `status >= 500`, so 5xx is included.
+- **Block rate:** more than 30% of the same window are 401 or 403. That means the
+  crawler is being refused broadly, and someone has to find out why before anything
+  else is sent.
+- 403 counted toward the 10% overload trip until 2026-10-23. The first real Wisconsin
+  snapshot halted with 6 Cloudflare/Akamai firewall 403s in 50 outcomes and no 429s or
+  5xx at all (plan §12). A single 403 is a site saying no: it is recorded `NOT_MEASURED`
+  and not asked again that day.
+- The fetch order is shuffled per run with a recorded seed (`--order-seed`, in the run
+  report and `config_json`), so sites behind the same firewall or host don't bunch into
+  one window.
 - an abuse/complaint marker appears on disk;
 - the post-run ledger audit cannot be reconciled against rule 2 (see below).
 
@@ -218,7 +228,8 @@ tested and refuses to run live, but none of it has yet met a real government web
 - rule 3/4 behaviour under live conditions (real jitter against real servers, real
   per-IP serialisation across distinct IPs — in mock mode every domain is `127.0.0.1`, so
   the per-IP limit serialises the whole run and does not prove the live case);
-- the kill switch's 10%-of-50 rolling window on real traffic;
+- the kill switch's two rolling-window trips (10% overload, 30% block rate) on a full
+  real run. The old combined rule's one real run halted on firewall 403s (plan §12);
 - the change detector on real version movements (it has been proved against a real SQLite
   database and synthetic observations, including the strictly-earlier-history fix and
   windowed flap detection, but not against a live site's header churn);

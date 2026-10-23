@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+from pathlib import Path
 
 import pytest
 
@@ -65,6 +66,7 @@ def test_a_region_run_touches_only_that_region(tmp_path, monkeypatch):
         {"mn0.gov", "mn1.gov", "mn2.gov"}
     cfg = json.loads(conn.execute("SELECT config_json FROM runs").fetchone()["config_json"])
     assert cfg["region"] == "comparison"
+    assert isinstance(cfg["order_seed"], int) and summary["order_seed"] == cfg["order_seed"]
     assert "region: comparison" in (tmp_path / "reports" / f"run_{summary['run_id']}.md").read_text()
 
 
@@ -125,3 +127,25 @@ def test_stale_lock_is_a_refusal_not_a_guess(tmp_path):
     with pytest.raises(SystemExit, match="stale"):
         with pipeline.RunLock(tmp_path / "run.lock"):
             pass
+
+
+def test_fetch_order_is_shuffled_reproducible_and_input_order_free():
+    doms = [f"d{i:03d}.gov" for i in range(200)]
+    a = pipeline.fetch_order(doms, 42)
+    assert sorted(a) == sorted(doms) and a != sorted(doms), "every domain once, not in sorted order"
+    assert pipeline.fetch_order(list(reversed(doms)), 42) == a, "depends on the set and seed only"
+    assert pipeline.fetch_order(doms, 43) != a
+
+
+def test_explicit_order_seed_is_recorded(tmp_path, monkeypatch):
+    for k, port in (("HTTP", 18461), ("HTTPS", 18462), ("HTTP_ONLY", 18465), ("DEAD", 18469)):
+        monkeypatch.setenv(f"PATCHWATCH_MOCK_{k}_PORT", str(port))
+    for name in ("REPORTS_DIR", "DATA_DIR", "LOGS_DIR"):
+        monkeypatch.setattr(config, name, tmp_path / name.lower())
+    monkeypatch.setattr(config, "ABUSE_FLAG_PATH", tmp_path / "abuse.flag")
+    frame = tmp_path / "f.csv"
+    write_frame(frame, frame_rows(2, 0))
+    s = pipeline.run_snapshot(sample_path=frame, db_path=tmp_path / "s.db", mock=True,
+                              region="wisconsin", order_seed=20261023, quiet=True)
+    assert s["order_seed"] == 20261023
+    assert "fetch order seed: `20261023`" in Path(s["run_log"]).read_text()

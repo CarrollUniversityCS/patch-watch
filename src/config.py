@@ -62,8 +62,17 @@ MAX_SENDS_PER_DOMAIN = 3                # rule 2: 3 budget-charged PHASES, not r
 
 # ---------------------------------------------------------------- kill switch (rule 6)
 KILL_ROLLING_WINDOW = 50
-KILL_TRIP_RATIO = 0.10                  # >10% of requests in the window are 403/429/5xx
-KILL_STATUS_CODES = frozenset({403, 429})
+# Two trips over the same rolling window (plan §12, 2026-10-23):
+#  * OVERLOAD: >10% of outcomes are 429 or 5xx - signs we may be causing load.
+#  * BLOCK:    >30% of outcomes are 401/403 - our crawler is being refused broadly,
+#              so stop and find out why. A single CDN firewall 403 on first contact is
+#              a site saying no (recorded NOT_MEASURED, never retried that day); on
+#              2026-10-23 such 403s alone (Cloudflare/Akamai) tripped the old combined
+#              10% rule a quarter of the way through Wisconsin with no load signal at all.
+KILL_TRIP_RATIO = 0.10                  # overload trip: >10% of the window are 429/5xx
+KILL_STATUS_CODES = frozenset({429})    # plus every status >= 500 (KillSwitch.bad)
+KILL_BLOCK_RATIO = 0.30                 # block trip: >30% of the window are 401/403
+KILL_BLOCK_STATUS_CODES = frozenset({401, 403})
 KILL_ABUSE_MARKER = "ABUSE_COMPLAINT"   # presence of this string in logs/abuse.flag halts runs
 
 # ---------------------------------------------------------------- storage paths
@@ -83,5 +92,9 @@ LEDGER_EXPORT_PATH = DATA_DIR / "request_ledger.csv"
 SNAPSHOT_A_LABEL = "A_day1"
 SNAPSHOT_B_LABEL = "B_day1p8h"
 MIN_SNAPSHOT_GAP_H = 6.0
+# Fetch order is shuffled per run (plan §12, 2026-10-23) so that firewalled or
+# shared-host sites, which cluster in the frame's sorted order, do not bunch into one
+# kill-switch window. The seed is drawn per run unless given, and is recorded in the
+# run's config_json and report, so the order is reproducible.
 
 __all__ = [n for n in dir() if n.isupper()]

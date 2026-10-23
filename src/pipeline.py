@@ -27,7 +27,9 @@ import itertools
 import json
 import logging
 import os
+import random
 import re
+import secrets
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -177,9 +179,11 @@ async def capture(conn: db.sqlite3.Connection, *, sample_rows: list[dict[str, st
                   test_hosts: Iterable[str] = (),
                   mock: bool = False,
                   timeouts: tuple[float, float] | None = None,
-                  region: str | None = None) -> dict[str, Any]:
+                  region: str | None = None,
+                  order_seed: int | None = None) -> dict[str, Any]:
     """Fetch, classify, store, diff. One snapshot (of one region, when given)."""
-    domains = [r["domain"] for r in sample_rows]
+    order_seed = secrets.randbits(32) if order_seed is None else int(order_seed)
+    domains = fetch_order([r["domain"] for r in sample_rows], order_seed)
     started = db.utc_now_iso()
 
     ledger = fetch.Ledger()
@@ -204,7 +208,7 @@ async def capture(conn: db.sqlite3.Connection, *, sample_rows: list[dict[str, st
             "connect_timeout_s": crawler.connect_timeout, "total_timeout_s": crawler.total_timeout,
             "max_body_bytes": config.MAX_BODY_BYTES, "max_redirects": config.MAX_REDIRECTS,
             "cookie_jar": config.COOKIE_JAR, "mock": bool(test_hosts),
-            "blocklist_size": len(blocklist), "region": region,
+            "blocklist_size": len(blocklist), "region": region, "order_seed": order_seed,
         }, sort_keys=True),
         "notes": "mock loopback run" if test_hosts else "live run",
     })
@@ -257,8 +261,21 @@ async def capture(conn: db.sqlite3.Connection, *, sample_rows: list[dict[str, st
         "flapping_domains": len(flapping), "kill_switch": tripped,
         "audit_problems": audit_problems,
         "ledger": ledger, "observations": observations, "mock": bool(test_hosts),
-        "region": region,
+        "region": region, "order_seed": order_seed,
     }
+
+
+def fetch_order(domains: list[str], seed: int) -> list[str]:
+    """The run's request order: the frame sorted, then shuffled by `seed`.
+
+    The frame is sorted by stratum, so firewalled sites (state agencies behind one CDN)
+    and shared-host sites sit next to each other and land in the same kill-switch
+    window. Shuffling spreads them out. Sorting first makes the order depend only on
+    the set of domains and the seed, which the run records (plan §12, 2026-10-23).
+    """
+    out = sorted(domains)
+    random.Random(seed).shuffle(out)
+    return out
 
 
 def _tally(rows: Iterable[dict[str, Any] | db.sqlite3.Row], key: str) -> dict[str, int]:
@@ -298,6 +315,7 @@ def run_markdown(summary: dict[str, Any]) -> str:
         f"(cap {config.MAX_SENDS_PER_DOMAIN}/domain: https, unverified retry, http fallback). "
         f"Ledger rows including same-domain redirect hops: {summary['ledger_rows']}",
         f"- User-Agent: `{config.USER_AGENT}`",
+        f"- fetch order seed: `{summary.get('order_seed')}`",
         "",
         "## Classes",
         "",
@@ -424,7 +442,7 @@ def run_snapshot(*, sample_path: Path | str | None = None, db_path: Path | str |
                  blocklist_path: Path | str | None = None, snapshot_label: str = "",
                  run_id: str | None = None, limit: int | None = None,
                  mock: bool = False, mock_rotate: int = 0, quiet: bool = False,
-                 region: str | None = None) -> dict[str, Any]:
+                 region: str | None = None, order_seed: int | None = None) -> dict[str, Any]:
     """Synchronous entry point used by scripts/run_snapshot.py and the cron snippet."""
     attach_logging()
     sample_path = Path(sample_path or (config.DATA_DIR / "pilot_sample.csv"))
@@ -477,7 +495,8 @@ def run_snapshot(*, sample_path: Path | str | None = None, db_path: Path | str |
                     conn, sample_rows=sample_rows, run_id=run_id or new_run_id(snapshot_label),
                     snapshot_label=snapshot_label or "adhoc", blocklist=blocklist,
                     url_for=url_for, test_hosts=test_hosts or (), mock=mock,
-                    timeouts=(1.0, 3.0) if mock else None, region=region))
+                    timeouts=(1.0, 3.0) if mock else None, region=region,
+                    order_seed=order_seed))
                 summary["ledger_csv"] = str(export_ledger(
                     summary["ledger"].rows,
                     config.DATA_DIR / f"ledger_{summary['run_id']}.csv"))
@@ -504,6 +523,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--label", default="", help="snapshot label, e.g. A_day1")
     ap.add_argument("--run-id", help="override the generated run id")
     ap.add_argument("--limit", type=int, help="only the first N domains (smoke test)")
+    ap.add_argument("--order-seed", type=int,
+                    help="fetch-order shuffle seed (default: drawn per run, always recorded)")
     ap.add_argument("--region", choices=("wisconsin", "comparison"),
                     help="snapshot one frame region only (plan §6: always run them separately)")
     ap.add_argument("--mock", action="store_true",
@@ -526,7 +547,8 @@ def main(argv: list[str] | None = None) -> int:
 
     s = run_snapshot(sample_path=args.sample, db_path=args.db, blocklist_path=args.blocklist,
                      snapshot_label=args.label, run_id=args.run_id, limit=args.limit,
-                     mock=args.mock, mock_rotate=args.mock_rotate, region=args.region)
+                     mock=args.mock, mock_rotate=args.mock_rotate, region=args.region,
+                     order_seed=args.order_seed)
     return 2 if (s["kill_switch"] or s["audit_problems"]) else 0
 
 
