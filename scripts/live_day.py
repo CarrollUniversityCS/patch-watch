@@ -11,14 +11,22 @@ line does:
     scripts/run_snapshot.py --region comparison --label CMP_<day>
 
 Everything it adds is a refusal, never an action. Each one implements a limit that
-already exists in the runbook, so the worst this file can do is skip a day:
+already exists in the runbook or the frozen plan, so the worst this file can do is skip a day:
 
-  * the day it was given must be today's local date, else nothing runs -- a task that
-    fired on the wrong day would silently double up or gap a snapshot (section 2.5);
+  * it runs only on the plan's snapshot days (SNAPSHOT_DAYS, plan section 6 and
+    scripts/cron.disabled); on any other day it exits 0 having sent nothing, so ONE
+    recurring daily task can carry the whole schedule and cannot drift into a 23rd run;
+  * if a date is given it must be today's date in America/Chicago, else nothing runs; with
+    no argument it uses today (a fixed argument on a recurring task refused every later day);
+  * nothing starts at or after 19:00 Chicago time (runbook section 5.3), so a catch-up run
+    after the machine wakes late cannot spill into the evening;
+  * nothing runs once the plan's early-stop rule is met: two consecutive complete Wisconsin
+    snapshots with no domain EXPOSED or on an end-of-life branch (plan section 6; EOL counts
+    as exposed by PI decision 2026-10-28, section 12);
   * nothing runs if logs/abuse.flag exists (section 2.1: a halt is a stop, not a bug);
-  * nothing runs for a region that was already snapshotted in the last 24 hours
-    (section 2.5: one live snapshot per region per day, enforced in code rather than by
-    trusting that only one cron line existed);
+  * nothing runs for a region that already ran on today's Chicago date, or less than
+    MIN_GAP (12 h) ago (section 2.5: one live snapshot per region per day, enforced in code
+    rather than by trusting that only one scheduled task existed);
   * if the check itself cannot be made, nothing runs -- a missed day is recoverable as a
     stated limitation, a broken promise to a site operator is not (runbook preamble);
   * comparison runs only if wisconsin exits 0, which is the `&&` in the cron line;
@@ -31,7 +39,8 @@ It does not set PATCHWATCH_GATE_A. The gate marker is supplied by the schedule, 
 scripts/live_day.cmd, exactly as section 4 puts it in the crontab environment block --
 deliberately not here, so that a hand-run of this file cannot authorise live traffic.
 
-Usage:  python scripts/live_day.py 20261024
+Usage:  python scripts/live_day.py            (today, America/Chicago)
+        python scripts/live_day.py 20261029   (must equal today)
 """
 from __future__ import annotations
 
@@ -43,12 +52,36 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import NoReturn
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE = ROOT / "data" / "wi_frame.csv"
 DB_PATH = ROOT / "data" / "study.db"
 ABUSE_FLAG = ROOT / "logs" / "abuse.flag"
 RUNNER = ROOT / "scripts" / "run_snapshot.py"
+
+# The schedule's clock (plan section 6: 09:00 America/Chicago). Named, not the machine's
+# local zone, so a host set to another zone cannot shift the calendar day.
+LOCAL_TZ = ZoneInfo("America/Chicago")
+
+
+def _days(first: dt.date, last: dt.date) -> tuple[dt.date, ...]:
+    return tuple(first + dt.timedelta(days=i) for i in range((last - first).days + 1))
+
+
+# Plan section 6 / scripts/cron.disabled: daily S1 .. day 14, then days 21, 28, 45, 60, 90.
+SNAPSHOT_DAYS: frozenset[dt.date] = frozenset(
+    _days(dt.date(2026, 10, 23), dt.date(2026, 11, 4))
+    + (dt.date(2026, 11, 11), dt.date(2026, 11, 18), dt.date(2026, 12, 5),
+       dt.date(2026, 12, 20), dt.date(2027, 1, 19)))
+LATEST_START = dt.time(19, 0)               # runbook section 5.3: never start after 19:00
+MIN_GAP = dt.timedelta(hours=12)            # floor between two runs of one region
+
+# Plan section 6 early stop. Classes that keep the study running: below the fixed release,
+# or on a branch with no official fix (EOL counts as exposed, PI decision 2026-10-28).
+STILL_EXPOSED_CLASSES = ("VULNERABLE_BY_VERSION", "EOL_UNFIXED")
+STOP_RULE_REGION = "wisconsin"
+STOP_RULE_RUNS = 2
 
 # Order is the chain itself (section 4): wisconsin first, comparison only if it exits 0.
 ALL_REGIONS = ("wisconsin", "comparison")
@@ -83,6 +116,7 @@ def selected_regions() -> tuple[str, ...]:
 # 4+ a refusal to send any traffic (see the refusal reasons in the docstring).
 EXIT_WRONG_DAY, EXIT_NO_FRAME, EXIT_HALTED, EXIT_ALREADY_RAN, EXIT_CANNOT_CHECK = 4, 5, 6, 7, 8
 EXIT_BAD_REGIONS = 9                        # PATCHWATCH_REGIONS set to something unparseable
+EXIT_TOO_LATE, EXIT_STOP_RULE = 10, 11      # after 19:00; plan section 6 early stop met
 
 
 def refuse(why: str, code: int) -> NoReturn:
@@ -100,64 +134,110 @@ def parse_utc(stamp: str) -> dt.datetime:
     return parsed
 
 
-GUARD_TOLERANCE = dt.timedelta(minutes=15)
+def now_local() -> dt.datetime:
+    return dt.datetime.now(LOCAL_TZ)
 
 
-def run_guard_window(now: dt.datetime | None = None) -> dt.datetime:
-    """Start of the lookback that decides whether this region already ran today.
-
-    24 h minus GUARD_TOLERANCE. The strict-24 h version ate the 2026-10-27 snapshot day (an
-    off-schedule 2026-10-26 16:52 run was still inside 24 h at 09:00) and left every scheduled
-    day balanced on seconds, because consecutive 09:00 tasks start ~14:00:1xZ apart. Section 2.5
-    promises a site is not visited twice in a day; 15 minutes of overlap does not break that,
-    while a same-day manual re-run is still hours early and still refused.
-    """
-    if now is None:
-        now = dt.datetime.now(dt.timezone.utc)
-    return now - dt.timedelta(hours=24) + GUARD_TOLERANCE
-
-
-def prior_run_for(region: str, window_start: dt.datetime) -> str:
-    """Return a description of a same-region run inside the window, or '' if none.
+def _runs(conn: sqlite3.Connection) -> list[tuple[str, str, str | None, str | None, dict]]:
+    """(run_id, started, finished, kill_switch, config) for every run, oldest first.
 
     Raises so the caller refuses rather than guessing: an unreadable ledger cannot
-    prove that today's run is the first one.
+    prove anything about earlier runs.
+    """
+    out = []
+    for run_id, started, finished, kill, config_json in conn.execute(
+            "SELECT run_id, started_at_utc, finished_at_utc, kill_switch, config_json "
+            "FROM runs ORDER BY started_at_utc"):
+        if not started:
+            continue
+        if not (config_json or "").strip():
+            raise ValueError(f"run {run_id} has no region in config_json")
+        try:
+            config = json.loads(config_json)
+            config.get("region")
+        except (json.JSONDecodeError, AttributeError):
+            raise ValueError(f"run {run_id} has unreadable config_json")
+        out.append((run_id, started, finished, kill, config))
+    return out
+
+
+def _connect() -> sqlite3.Connection:
+    return sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro", uri=True)
+
+
+def prior_run_for(region: str, now: dt.datetime) -> str:
+    """Describe a same-region run on today's Chicago date or within MIN_GAP, or ''.
+
+    The calendar day is what section 2.5 promises ("one per region per day"). The old
+    rolling-24 h check ate the 2026-10-27 snapshot (an off-schedule 16:52 run the day
+    before) and balanced every scheduled day on seconds; MIN_GAP keeps a late-evening
+    run and an early-morning run from landing back to back across midnight.
     """
     if not DB_PATH.exists():
         return ""                                     # no database yet = no prior run
-    conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro", uri=True)
+    conn = _connect()
     try:
-        rows = conn.execute(
-            "SELECT run_id, started_at_utc, config_json FROM runs").fetchall()
+        runs = _runs(conn)
     finally:
         conn.close()
-    for run_id, started, config_json in rows:
-        if not started:
+    for run_id, started, _fin, _kill, config in runs:
+        if config.get("region") != region:
             continue
-        if (config_json or "").strip():
-            try:
-                seen_region = json.loads(config_json).get("region")
-            except (json.JSONDecodeError, AttributeError):
-                raise ValueError(f"run {run_id} has unreadable config_json")
-        else:
-            raise ValueError(f"run {run_id} has no region in config_json")
-        if seen_region != region:
-            continue
-        if parse_utc(started) >= window_start:
+        at = parse_utc(started)
+        if at.astimezone(LOCAL_TZ).date() == now.astimezone(LOCAL_TZ).date() or now - at < MIN_GAP:
             return f"run_id={run_id} started_at_utc={started}"
     return ""
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 2 or len(argv[1]) != 8 or not argv[1].isdigit():
-        refuse("usage: live_day.py YYYYMMDD (the local date this task was created to capture)",
-               EXIT_WRONG_DAY)
-    day = argv[1]
+def stop_rule_met() -> str:
+    """Plan section 6 early stop: describe it if met, else ''.
 
-    today = dt.date.today().strftime("%Y%m%d")
+    Met when the last STOP_RULE_RUNS complete Wisconsin snapshots (finished, no kill-switch
+    trip, not mock) each have no observation in STILL_EXPOSED_CLASSES. Halted or unfinished
+    runs are not snapshots and do not count either way.
+    """
+    if not DB_PATH.exists():
+        return ""
+    conn = _connect()
+    try:
+        complete = [r for r in _runs(conn)
+                    if r[4].get("region") == STOP_RULE_REGION and r[2] and not r[3]
+                    and not r[4].get("mock")]
+        last = complete[-STOP_RULE_RUNS:]
+        if len(last) < STOP_RULE_RUNS:
+            return ""
+        marks = ",".join("?" * len(STILL_EXPOSED_CLASSES))
+        for run_id, *_ in last:
+            (n,) = conn.execute(
+                f"SELECT COUNT(*) FROM observations WHERE run_id = ? AND class IN ({marks})",
+                (run_id, *STILL_EXPOSED_CLASSES)).fetchone()
+            if n:
+                return ""
+    finally:
+        conn.close()
+    return ("no Wisconsin domain was EXPOSED or EOL in the last "
+            f"{STOP_RULE_RUNS} complete snapshots ({', '.join(r[0] for r in last)})")
+
+
+def main(argv: list[str]) -> int:
+    now = now_local()
+    today = now.strftime("%Y%m%d")
+    if len(argv) > 2 or (len(argv) == 2 and (len(argv[1]) != 8 or not argv[1].isdigit())):
+        refuse("usage: live_day.py [YYYYMMDD]  (omit for today, America/Chicago)",
+               EXIT_WRONG_DAY)
+    day = argv[1] if len(argv) == 2 else today
     if day != today:
         refuse(f"this task is dated {day} but today is {today}; running would break "
                f"one-snapshot-per-region-per-day (section 2.5)", EXIT_WRONG_DAY)
+
+    if now.date() not in SNAPSHOT_DAYS:
+        print(f"live_day {now.isoformat(timespec='seconds')}: SKIPPING - {today} is not a "
+              f"snapshot day (plan section 6); nothing sent")
+        return 0
+    if now.time() >= LATEST_START:
+        refuse(f"it is {now:%H:%M} Chicago time; no live run starts after "
+               f"{LATEST_START:%H:%M} (section 5.3). Today is a missed day - tell Jack",
+               EXIT_TOO_LATE)
 
     if not SAMPLE.exists():
         refuse(f"no frame at {SAMPLE.relative_to(ROOT)} "
@@ -167,20 +247,27 @@ def main(argv: list[str]) -> int:
         refuse("logs/abuse.flag exists - the study is halted and only Jack clears a halt "
                "(section 2.1)", EXIT_HALTED)
 
-    window_start = run_guard_window()
+    try:
+        stopped = stop_rule_met()
+    except (sqlite3.Error, ValueError) as exc:
+        refuse(f"cannot check the plan's early-stop rule ({exc})", EXIT_CANNOT_CHECK)
+    if stopped:
+        refuse(f"plan section 6 early stop is met: {stopped}. Both regions stop; "
+               f"message Jack", EXIT_STOP_RULE)
+
     regions = selected_regions()            # may be a held subset; refuses if unparseable
 
     for region in regions:
         label = f"{LABEL_PREFIX[region]}_{day}"
         already = ""
         try:
-            already = prior_run_for(region, window_start)
+            already = prior_run_for(region, now)
         except (sqlite3.Error, ValueError) as exc:
             refuse(f"cannot verify whether {region} already ran today ({exc}); "
                    f"refusing rather than risking a second run (section 2.5)",
                    EXIT_CANNOT_CHECK)
         if already:
-            refuse(f"{region} already snapshotted within the last 24 h "
+            refuse(f"{region} already snapshotted today or under {MIN_GAP} ago "
                    f"({already}); a second live run per region per day is section 2.5",
                    EXIT_ALREADY_RAN)
 
