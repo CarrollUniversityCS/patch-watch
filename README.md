@@ -51,7 +51,7 @@ sites hide it, and distros can backport a fix without changing the version strin
 | `scripts/cron.disabled` | The schedule, deliberately commented out (Stage 4 says install it disabled). |
 | `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 380 at 2026-10-23). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
 | `data/` | Frame, sample, database, ledger exports — gitignored. See `data/README.md`. |
-| `docs/` | `analysis_plan.md` (the pre-registration), `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out notice, to be published as the GitHub profile README that `PROJECT_URL` and the user agent point at), `IRB_INQUIRY_NOTE.md` and `IRB_DETERMINATION.md`, and `HERMES_RUNBOOK.md` (the bounded operator runbook for the live schedule). |
+| `docs/` | `analysis_plan.md` (the pre-registration), `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out notice, to be published as the GitHub profile README that `PROJECT_URL` and the user agent point at), `IRB_INQUIRY_NOTE.md` and `IRB_DETERMINATION.md`, `HERMES_RUNBOOK.md` (the bounded operator runbook for the live schedule), and `RESEARCH_DIRECTIONS.md` (five candidate follow-on studies and the prior work behind them; not part of the pre-registration). |
 | `requirements.txt` | Exact dependency versions. httpx is pinned on purpose (no-cookie guarantee). |
 | `blocklist.txt` | Hard rule 5: domains removed from measurement on request. |
 
