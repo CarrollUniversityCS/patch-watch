@@ -2,18 +2,22 @@
 """Standalone daily checks for the live schedule, and the local patch-watch hub page.
 
 Why this file exists. The 08:30 / 09:45 / 11:30 / 18:00 checks in docs/HERMES_RUNBOOK.md
-section 5 and docs/HERMES_UPDATE_2026-10-28.md were run by the Hermes agent. They are
-mechanical, so they now run as plain Windows scheduled tasks (scripts/install_checks.ps1)
-with no model in the loop. Hermes keeps only the jobs that need judgement: the opt-out
-inbox and the weekly oversight audit.
+section 5 and docs/HERMES_UPDATE_2026-10-28.md, and the daily opt-out check of section 7,
+were run by the Hermes agent. They are mechanical, so they now run as plain Windows
+scheduled tasks (scripts/install_checks.ps1) with no model in the loop. Hermes keeps only
+the weekly oversight audit. Recording a new opt-out stays manual: append it to
+logs/optouts.md, and the 08:45 check puts it on the blocklist.
 
 Every check writes its result to logs/hub/checks/<date>_<check>.json and rebuilds
 logs/hub/index.html, a local status page for all scheduled jobs. logs/ is gitignored, so
 nothing here is ever published (hard rule 7).
 
-    .venv\\Scripts\\python.exe -X utf8 scripts\\pw_checks.py prerun|started|postrun|lastchance|build
+    .venv\\Scripts\\python.exe -X utf8 scripts\\pw_checks.py prerun|optout|started|postrun|lastchance|build
 
 What a check may change, and nothing else:
+  * optout: append a domain that logs/optouts.md records but the effective blocklist
+    lacks to blocklist.local.txt (section 7 step 1; it only ever adds). If a blocklisted
+    domain responded in a run that started after its opt-out, disable the live task.
   * started / lastchance: on a snapshot day with no run and no line in logs/cron.out (the
     task never fired), before 19:00, start the existing "patch-watch live day" task ONCE
     (the update doc's missed-day step). live_day.py still refuses a second run, a wrong
@@ -32,6 +36,7 @@ import html
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -48,6 +53,8 @@ ABUSE_FLAG = LOGS / "abuse.flag"
 RUN_LOCK = LOGS / "run.lock"
 REPORTS = ROOT / "reports"
 BACKUPS = ROOT / "backups"
+OPTOUTS = LOGS / "optouts.md"
+BLOCKLIST_LOCAL = ROOT / "blocklist.local.txt"
 HUB = LOGS / "hub"
 CHECKS = HUB / "checks"
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
@@ -64,7 +71,7 @@ LATEST_START = live_day.LATEST_START
 LIVE_TASK = "patch-watch live day"
 EXPECTED_ASN = "AS40379"
 MIN_FREE_GB = 2
-CHECK_NAMES = {"prerun": "08:30 pre-run", "started": "09:45 did it start?",
+CHECK_NAMES = {"prerun": "08:30 pre-run", "optout": "08:45 opt-outs", "started": "09:45 did it start?",
                "postrun": "11:30 post-run", "lastchance": "18:00 last chance"}
 RANK = {"ok": 0, "info": 0, "warn": 1, "fail": 2}
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -261,6 +268,78 @@ def live_task_result(today: dt.date, snap: bool) -> Result:
     return Result("Live task", "ok", f"{t['state']}, {when}")
 
 
+OPTOUT_HEAD = re.compile(r"^## (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) UTC\W+([A-Za-z0-9.-]+\.[A-Za-z]{2,})\s*$")
+
+
+def optout_entries() -> dict[str, str]:
+    """{domain: earliest opt-out, UTC ISO} from the '## <date> <time> UTC - <domain>' headings."""
+    out: dict[str, str] = {}
+    if not OPTOUTS.exists():
+        return out
+    for ln in OPTOUTS.read_text(encoding="utf-8", errors="replace").splitlines():
+        m = OPTOUT_HEAD.match(ln.strip())
+        if m:
+            dom, at = m.group(3).lower().rstrip("."), f"{m.group(1)}T{m.group(2)}:00Z"
+            out[dom] = min(out.get(dom, at), at)
+    return out
+
+
+def load_blocklist() -> set[str]:
+    """The effective blocklist exactly as the collector reads it (src/fetch.py)."""
+    sys.path.insert(0, str(ROOT / "src"))
+    try:
+        import fetch
+        return fetch.load_blocklist()
+    finally:
+        sys.path.remove(str(ROOT / "src"))
+
+
+def check_optout(now: dt.datetime) -> list[Result]:
+    """Section 7: every recorded opt-out is blocklisted, and no blocklisted domain responded
+    in a run that started after its opt-out (blocklist.txt entries count from day one)."""
+    out: list[Result] = []
+    entries = optout_entries()
+    out.append(Result("Opt-outs on file", "info", f"{len(entries)} in logs/optouts.md"
+                      if OPTOUTS.exists() else "logs/optouts.md missing"))
+
+    blocked = load_blocklist()
+    missing = sorted(d for d in entries if d not in blocked)
+    if missing:
+        with BLOCKLIST_LOCAL.open("a", encoding="utf-8") as f:
+            for d in missing:
+                f.write(f"{d}   # {entries[d][:10]} from logs/optouts.md, added by pw_checks {now:%Y-%m-%d %H:%M}\n")
+        blocked = load_blocklist()
+    still = [d for d in missing if d not in blocked]
+    if still:
+        out.append(Result("Blocklist covers every opt-out", "fail", "could not add: " + ", ".join(still)))
+    elif missing:
+        out.append(Result("Blocklist covers every opt-out", "warn",
+                          "added to blocklist.local.txt: " + ", ".join(missing)))
+    else:
+        out.append(Result("Blocklist covers every opt-out", "ok", f"{len(blocked)} domains blocked"))
+
+    if not DB.exists():
+        out.append(Result("No traffic after opt-out", "info", "data/study.db does not exist yet"))
+        return out
+    con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    try:
+        hits = con.execute("SELECT o.domain, r.run_id, r.started_at_utc FROM observations o"
+                           " JOIN runs r USING (run_id) WHERE o.status_code IS NOT NULL").fetchall()
+    finally:
+        con.close()
+    bad = sorted({f"{d} in {rid}" for d, rid, started in hits
+                  if d in blocked and (started or "") > entries.get(d, "")})
+    if not bad:
+        out.append(Result("No traffic after opt-out", "ok", "no blocklisted domain responded after its opt-out"))
+        return out
+    out.append(Result("No traffic after opt-out", "fail", "; ".join(bad[:10])))
+    rc, txt = ps(f"Disable-ScheduledTask -TaskName '{LIVE_TASK}' -ErrorAction Stop | Out-Null")
+    out.append(Result("Schedule paused (section 7)", "fail",
+                      "live task DISABLED; only Jack re-enables it" if rc == 0 else
+                      f"could not disable the live task - pause it by hand: {txt[-200:]}"))
+    return out
+
+
 def check_started(now: dt.datetime, last_chance: bool) -> list[Result]:
     today = now.date()
     if today not in live_day.SNAPSHOT_DAYS:
@@ -354,7 +433,7 @@ def check_postrun(now: dt.datetime) -> list[Result]:
     return out
 
 
-CHECKS_FN = {"prerun": lambda n: check_prerun(n), "started": lambda n: check_started(n, False),
+CHECKS_FN = {"prerun": lambda n: check_prerun(n), "optout": lambda n: check_optout(n), "started": lambda n: check_started(n, False),
              "postrun": lambda n: check_postrun(n), "lastchance": lambda n: check_started(n, True)}
 
 

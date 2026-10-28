@@ -132,6 +132,67 @@ def test_postrun_clean_run_backs_up(box):
     assert {r.name: r.status for r in res}["Run report safety audit"] == "ok"
 
 
+@pytest.fixture
+def optbox(box, monkeypatch, tmp_path):
+    """box plus an opt-out log, a local blocklist, and a fetch-free blocklist reader."""
+    local = tmp_path / "blocklist.local.txt"
+    monkeypatch.setattr(pw, "OPTOUTS", box.logs / "optouts.md")
+    monkeypatch.setattr(pw, "BLOCKLIST_LOCAL", local)
+    monkeypatch.setattr(pw, "load_blocklist", lambda: {"cisa.gov"} | (
+        {ln.split("#")[0].strip() for ln in local.read_text(encoding="utf-8").splitlines()} - {""}
+        if local.exists() else set()))
+    c = sqlite3.connect(box.db)
+    c.execute("CREATE TABLE observations (run_id TEXT, domain TEXT, status_code INT)")
+    c.commit()
+    c.close()
+    box.local = local
+    box.optout = lambda *heads: (box.logs / "optouts.md").write_text(
+        "# Opt-out and complaint log\n\n## Entries\n\n" + "\n\n".join(heads) + "\n", encoding="utf-8")
+
+    def observe(domain, label, started):
+        box.add_run(label, run_id=f"R_{label}")
+        c = sqlite3.connect(box.db)
+        c.execute("UPDATE runs SET started_at_utc = ? WHERE run_id = ?", (started, f"R_{label}"))
+        c.execute("INSERT INTO observations VALUES (?,?,200)", (f"R_{label}", domain))
+        c.commit()
+        c.close()
+    box.observe = observe
+    return box
+
+
+def test_optout_missing_from_blocklist_is_added(optbox):
+    optbox.optout("## 2026-10-29 13:00 UTC — Example.GOV\nChannel: email")
+    res = {r.name: r for r in pw.check_optout(chi(DAY, 8, 45))}
+    assert res["Blocklist covers every opt-out"].status == "warn"
+    assert optbox.local.read_text(encoding="utf-8").startswith("example.gov ")
+    again = {r.name: r for r in pw.check_optout(chi(DAY, 8, 45))}
+    assert again["Blocklist covers every opt-out"].status == "ok"
+    assert optbox.local.read_text(encoding="utf-8").count("example.gov") == 1
+
+
+def test_traffic_before_optout_is_fine(optbox):
+    optbox.optout("## 2026-10-29 13:00 UTC — example.gov")
+    optbox.observe("example.gov", "WI_20261028", "2026-10-28T14:00:00Z")
+    res = {r.name: r.status for r in pw.check_optout(chi(DAY, 8, 45))}
+    assert res["No traffic after opt-out"] == "ok"
+    assert not any("Disable-ScheduledTask" in c for c in optbox.calls)
+
+
+def test_traffic_after_optout_pauses_schedule(optbox):
+    optbox.optout("## 2026-10-27 13:00 UTC — example.gov")
+    optbox.observe("example.gov", "WI_20261028", "2026-10-28T14:00:00Z")
+    res = {r.name: r.status for r in pw.check_optout(chi(DAY, 8, 45))}
+    assert res["No traffic after opt-out"] == "fail"
+    assert any("Disable-ScheduledTask" in c for c in optbox.calls)
+
+
+def test_committed_blocklist_domain_never_allowed(optbox):
+    optbox.optout()
+    optbox.observe("cisa.gov", "WI_20261028", "2026-10-28T14:00:00Z")
+    res = {r.name: r.status for r in pw.check_optout(chi(DAY, 8, 45))}
+    assert res["No traffic after opt-out"] == "fail"
+
+
 def test_hub_escapes_log_text(box):
     box.cron("live_day 2026-10-29T09:00:01: REFUSING - <script>x</script>")
     page = pw.build_hub().read_text(encoding="utf-8")

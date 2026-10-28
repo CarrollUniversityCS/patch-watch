@@ -1,10 +1,10 @@
 # patch-watch: install the standalone daily checks and the hub refresh as Windows tasks.
 #
-# Why this file exists. The 08:30 / 09:45 / 11:30 / 18:00 checks used to be Hermes agent
-# jobs. They are mechanical, so they now run scripts\pw_checks.py directly, with no model
-# in the loop. Each run writes logs\hub\checks\<date>_<check>.json and rebuilds the local
-# status page logs\hub\index.html. A sixth task rebuilds that page every 10 minutes.
-# Hermes keeps the opt-out inbox and the weekly oversight audit.
+# Why this file exists. The 08:30 / 08:45 opt-out / 09:45 / 11:30 / 18:00 checks used to
+# be Hermes agent jobs. They are mechanical, so they now run scripts\pw_checks.py directly,
+# with no model in the loop. Each run writes logs\hub\checks\<date>_<check>.json and
+# rebuilds the local status page logs\hub\index.html. Another task rebuilds that page
+# every 10 minutes. Hermes keeps only the weekly oversight audit.
 #
 # Run it from the repo root, in a normal PowerShell window:
 #     powershell -ExecutionPolicy Bypass -File scripts\install_checks.ps1
@@ -13,7 +13,8 @@
 #
 # This installs nothing that sends traffic. The only live task stays "patch-watch live day"
 # (scripts\install_schedule.ps1); the started/lastchance checks may start THAT task once on
-# a day it never fired, and the post-run check disables it on a halt.
+# a day it never fired, and the post-run and opt-out checks disable it on a halt or an
+# opt-out that was not honoured.
 
 $ErrorActionPreference = "Stop"
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -32,6 +33,7 @@ function Register-Check($Name, $Arg, $Trigger, [switch]$Wake) {
 }
 
 Register-Check "patch-watch check 0830 pre-run"     "prerun"     (New-ScheduledTaskTrigger -Daily -At 8:30am)
+Register-Check "patch-watch check 0845 opt-outs"    "optout"     (New-ScheduledTaskTrigger -Daily -At 8:45am)
 Register-Check "patch-watch check 0945 did-it-start" "started"    (New-ScheduledTaskTrigger -Daily -At 9:45am)
 Register-Check "patch-watch check 1130 post-run"    "postrun"    (New-ScheduledTaskTrigger -Daily -At 11:30am)
 Register-Check "patch-watch check 1800 last-chance" "lastchance" (New-ScheduledTaskTrigger -Daily -At 6:00pm) -Wake
