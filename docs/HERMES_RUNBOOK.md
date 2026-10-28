@@ -129,6 +129,19 @@ PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin
   October lines would fire again in 2027.
 - **Do not change times or dates.** If a run is missed, see §5.3.
 
+**On the Windows host (the one actually collecting):** there is no cron. One recurring
+task carries the whole schedule. Jack installs it once with
+`powershell -ExecutionPolicy Bypass -File scripts\install_schedule.ps1`; it runs
+`scripts\live_day.cmd` with **no date argument** every day at 09:00, starts as soon as the
+machine is awake if 09:00 was missed, and wakes the machine to run. `scripts/live_day.py`
+enforces everything else in code: it skips non-snapshot days (exit 0, nothing sent), refuses
+a date argument that is not today (exit 4), refuses at or after 19:00 Chicago time
+(exit 10), refuses a region that already ran on today's Chicago date or under 12 h ago
+(exit 7), and refuses once the plan §6 early stop is met (exit 11; EOL counts as exposed,
+plan §12, 2026-10-28). Pausing = `Disable-ScheduledTask -TaskName "patch-watch live day"`.
+Check 7 of the pre-run check becomes: the task exists, is enabled and its next run is
+today 09:00 (`Get-ScheduledTask -TaskName "patch-watch live day" | Get-ScheduledTaskInfo`).
+
 Hermes adds its own scheduled jobs to *its* scheduler, not to the collection crontab:
 
 | Time (America/Chicago) | Job |
@@ -200,6 +213,11 @@ If both the pre-run and post-run checks show no run for today, and the time is b
 19:00 local, run the day's chained crontab command **once** by hand, then do the
 post-run check. After 19:00, skip the day and tell Jack. Never run a missed day on a
 later date.
+
+On the Windows host the task catches up by itself when the machine wakes, and
+`live_day.py` refuses after 19:00 and refuses a second run, so a hand run is needed only
+if the task is missing or disabled. Read `logs\cron.out` first: a `REFUSING` line names
+the reason and exit code, and `SKIPPING` means today is not a snapshot day.
 
 ### 5.4 Backup (after every snapshot day, and before any fix)
 

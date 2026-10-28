@@ -11,7 +11,9 @@ rem live_day.py does the refusing (wrong day / halted / already ran) and runs wi
 rem then comparison only if wisconsin exited 0. Output goes to logs\cron.out, the file the
 rem section 5 post-run check reads, matching the cron line's ">> logs\cron.out 2>&1".
 rem
-rem Usage:  live_day.cmd 20261024        (the local date this task was created to capture)
+rem Usage:  live_day.cmd                 (today; one recurring daily task, see
+rem                                        scripts\install_schedule.ps1)
+rem         live_day.cmd 20261029        (optional; must equal today's Chicago date)
 rem ─────────────────────────────────────────────────────────────────────────────────────
 setlocal
 set "PATCHWATCH_GATE_A=APPROVED"
