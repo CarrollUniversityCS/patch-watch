@@ -191,6 +191,49 @@ Two limits apply throughout: header disclosure rates for products other than PHP
 unknown until the inventory runs on real data, and Wisconsin alone may support only
 description, so most of the gains for pathways 1 and 3 assume the national frame.
 
+## Second sweep (2026-10-28): closest prior work and pathways 7-12
+
+### Closest prior work found so far
+
+**"The Unpatchables: Why Municipalities Persist in Running Vulnerable Hosts"** (USENIX
+Security 2024). Passive external scans of 322 Dutch municipalities found unpatched hosts;
+practitioners at 54 municipalities confirmed the detections and were interviewed on why.
+This is the nearest study to the whole project and must be cited and positioned against.
+What it does not cover, as far as the abstract shows: the U.S., nonfederal governments as
+a census, patch speed over time, KEV deadlines, or public aggregate reporting. Its
+interview design suggests a mixed-methods follow-up: the measurement here plus interviews
+with Wisconsin IT staff on why sites stay on end-of-life PHP.
+
+Also to cite for hosting: Tajalizadehkhoob et al., "Herding Vulnerable Cats" (CCS 2017):
+across 1,259 shared hosting providers, providers measurably shape patch levels, CMS
+included. Relevant to RQ4 and pathways 3 and 9.
+
+### Candidate pathways
+
+| # | Pathway | Value | Novelty | Cost / fit | Main risk |
+|---|---|---|---|---|---|
+| 7 | **Retrospective panel from HTTP Archive / Common Crawl.** HTTP Archive's public BigQuery tables hold homepage response headers and Wappalyzer technology detections (with versions) monthly since 2016. Rebuild .gov patch curves for past KEV events (CVE-2024-4577, WordPress core, SharePoint, Apache) with no traffic. | Very high: pathway 3's data, available now | No version-retrospective study from either archive found | No new traffic; BigQuery cost on a GCP project | Monthly granularity (days are invisible); unknown coverage of small .gov sites, which may fall below HTTP Archive's popularity threshold. Check coverage against the frame first. |
+| 8 | **Policy evaluation.** The State and Local Cybersecurity Grant Program funded 839 projects in four years; its funding lapsed 2026-09-30 for the third time, and CISA's own evaluation collects survey feedback. Outside outcome measures (unsupported-software share, KEV patch speed) by state and subrecipient, plus state directives as natural experiments (Maryland BOD 2026-03-06 on KEV remediation for public-facing assets). | High for policy venues | Independent outcome data for SLCGP not found | Needs national frame; subrecipient lists are published per state | Selection: funded entities differ; causal claims need care |
+| 9 | **Vendor monoculture.** A non-peer-reviewed scan (Replatform Radar, 18,682 domains) found specialist platforms run 47.9% of identifiable U.S. government sites and one platform fronts 20.5%. The security consequence is unstudied: vendor-hosted sites are patched by the vendor, so patch speed may be bimodal and one vendor flaw is correlated risk across thousands of governments. | High; cheap | Security angle not found | Platform from headers and hosting clusters already collected (RQ4) | Platform detection accuracy; naming vendors conflicts with the plan's no-vendor-names rule, so report aggregated or with PI sign-off |
+| 10 | **Exposure to incident.** Join measured lag and unsupported-software share with public ransomware trackers (Comparitech, Ransomnews, Racktop). Prior: "Scoring the Unscorables" (2025) links external technology signatures to posture across incident datasets; no government panel found. | High | Government panel not found | National frame; incident data is press-based | Few events, weak causality; pairing a measured site with a named victim needs suppression |
+| 11 | **Exposure window.** Per KEV event, chart days between first observed exploitation and each patch milestone. Context: Rapid7 Q3 2026 reports 3 days average disclosure-to-exploitation, 71% within a week; VulnCheck H1 2026 reports 23.4% exploited within a day of CVE publication. | Medium-high for the live dashboard | Combination with a government census not found | Cheap once onset dates exist (GreyNoise first-seen, Shadowserver, KEV dateAdded as a floor) | Onset dates are vendor-reported and inconsistent; state the source per event |
+| 12 | **Election offices around the 2026-11-03 midterm.** The frame has an Election office stratum (50 Wisconsin, 171 comparison entities). Prior work covers .gov adoption (CDT 2022; Bipartisan Policy Center 2026: 39% to 54% of county election sites) and HTTPS, not patching. | Medium; timely | Patching angle not found | Already collected | Small cells; most counts suppressed |
+
+Lower priority, outside the homepage-only protocol: security.txt and disclosure-policy
+adoption (ScanGov already grades federal and state sites; needs requests to
+`/.well-known/`), certificate-transparency subdomain discovery (separate protocol), and
+third-party script supply chain (Censys counted 182 .gov hosts still loading polyfill.io in
+2024; needs version or script extraction from the page body, a notice change).
+
+### Effect on the priority order
+
+Pathway 7 may move to the top alongside pathway 1: it could supply the multi-CVE panel
+without waiting for new events. The first step is cheap and decisive: count how many frame
+domains appear in HTTP Archive's crawl. Pathway 9 rides on data already collected and fits
+next to the header inventory. Pathways 8 and 10 are the strongest policy papers but need
+the national frame. The Unpatchables narrows the novelty claim to: U.S., nonfederal
+census, longitudinal, KEV-deadline-anchored, public aggregate.
+
 ## Related findings worth citing
 
 - Bitsight: median 174 days to fix a KEV-listed flaw vs. 621 days otherwise; the sample
@@ -235,4 +278,20 @@ description, so most of the gains for pathways 1 and 3 assume the national frame
 - CISA Vulnerability Review FY2024-2025: https://www.cisa.gov/sites/default/files/2026-08/cisa-vulnerability-review-fy-2024-2025-508.pdf
 - endoflife.date API: https://endoflife.date/docs/api
 - U.S. Census Bureau, Census of Governments: https://www.census.gov/programs-surveys/cog.html
+- The Unpatchables (USENIX Security 2024): https://www.usenix.org/system/files/sec24summer-prepub-436-ethembabaoglu.pdf
+- Herding Vulnerable Cats (CCS 2017): https://arxiv.org/abs/1708.06693
+- Scoring the Unscorables (2025): https://arxiv.org/pdf/2506.06604
+- HTTP Archive FAQ (public BigQuery): https://httparchive.org/faq
+- HTTP Archive technology detection: https://discuss.httparchive.org/t/counting-wordpress-sites-since-2016-using-wappalyzer-detection/1349
+- SLCGP evaluation (Federal Register): https://www.federalregister.gov/documents/2026/06/01/2026-10893/agency-information-collection-activities-state-and-local-cybersecurity-grant-program-slcgp
+- FDD on SLCGP lapse: https://www.fdd.org/analysis/2026/10/05/federal-grant-programs-third-lapse-endangers-state-cybersecurity/
+- Maryland BOD 2026-03-06: https://doit.maryland.gov/policies/ci/cpp/Documents/Binding-Operational-Directive-2026-03-06.pdf
+- Replatform Radar, vendor concentration: https://replatformradar.com/research/civic-monoculture-2026
+- Comparitech H1 2026 government ransomware: https://www.comparitech.com/news/government-ransomware-roundup-h1-2026-stats-on-attacks-ransoms-and-data-breaches/
+- Ransomnews 2026: https://ransomnews.com/ransomware-attacks/2026/
+- Rapid7 Q3 2026 exploitation trends: https://www.helpnetsecurity.com/2026/10/27/rapid7-vulnerability-exploitation-trends-q3-2026-report/
+- VulnCheck H1 2026 (via Cybernews): https://cybernews.com/news/vulnerabilities-exploited-before-disclosure/
+- Bipartisan Policy Center, election .gov 2026: https://bipartisanpolicy.org/article/election-offices-are-increasingly-using-gov-websites-in-2026/
+- ScanGov security grades: https://govfresh.com/signal/scangov-security-grades-scores
+- Censys on polyfill.io: https://censys.com/blog/july-2-polyfill-io-supply-chain-attack-digging-into-the-web-of-compromised-domains/
 - CISA Vulnrichment: https://github.com/cisagov/vulnrichment
