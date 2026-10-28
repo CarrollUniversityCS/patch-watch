@@ -17,8 +17,9 @@ A live per-CVE patch dashboard is **not** new: Censys publishes a public PHP2She
 (by country, network and PHP version) and Shadowserver publishes CVE trackers and country
 totals. What did not turn up anywhere is a fixed population of U.S. nonfederal government
 sites, followed across many exploited CVEs, measured against the federal KEV deadline,
-with "cannot tell" reported as its own outcome. The pathways below are ordered by how
-strong the novelty claim looks.
+with "cannot tell" reported as its own outcome. Pathways 1-5 are ordered by how strong
+the novelty claim looked on 2026-10-28; pathway 6 was added the same day, after a first
+pass over the KEV catalog. The working order is in "Priority order" below.
 
 ## Pathways
 
@@ -90,6 +91,106 @@ strong the novelty claim looks.
   research; a notification arm probably would be. It needs its own IRB review and a
   randomized design written before any notice is sent.
 
+### 6. Share of sites on unsupported software
+
+- **Question.** What share of the frame runs a product branch with no security support
+  (PHP, Apache httpd, nginx, IIS / Windows Server), and how does it change over time?
+- **Method.** Branch from response headers already stored in `observations.headers_json`;
+  support dates from the endoflife.date API. Reported with the same suppression and the
+  same indeterminate handling as the PHP classes (a hidden version is not "supported").
+- **Why it looks useful.** A standing number, updated every snapshot, that does not wait
+  for a KEV listing, and directly comparable to CISA's finding that 51% of scanned
+  entities run unsupported software linked to over half of KEVs (CISA Vulnerability
+  Review FY2024-2025). The 10 Wisconsin domains on end-of-life PHP branches are its first
+  data point.
+- **Needs.** A header inventory (`src/inventory.py`, not yet written), an endoflife.date
+  snapshot pinned by date and hash, and a dashboard panel. No new traffic.
+- **Constraint.** The public notice describes a PHP study that reads response headers.
+  Reading the same headers for other products is a change of purpose: update
+  `docs/project_page.md` and send the IRB a courtesy note first.
+
+## KEV triage, first pass (2026-10-28)
+
+CISA KEV catalog version 2026.10.27 (1,760 entries, from github.com/cisagov/kev-data),
+sorted by product name with `scripts/kev_triage.py`. A keyword sort, not the four-question
+test; edge products are under-counted.
+
+| What the vulnerable product is | All KEV | Added 2025-10-28 to 2026-10-27 |
+|---|---|---|
+| A. Can show a version on a public homepage (web server, PHP, CMS, SharePoint) | 106 (6%) | 28 (9%) |
+| B. Edge device or server on its own host (VPN, firewall, mail, file transfer) | 428 (24%) | 87 (28%) |
+| C. Client or local software, or unmatched | 1,226 (70%) | 196 (63%) |
+
+Within A, a version that one homepage request can rank is realistic only for PHP (2 in
+the last year), SharePoint (8; build number in its response headers), WordPress core (3;
+version usually in the page body) and sometimes Apache httpd, Tomcat or OpenSSL. Drupal
+shows its major version only; ColdFusion, Struts and Magento usually show nothing. That
+is roughly one measurable KEV event a month. This is a judgment from product names, not
+yet checked against stored headers.
+
+## What the first pass adds to each pathway
+
+| Pathway | Value | Why |
+|---|---|---|
+| 1. KEV measurability | High | The triage is a crude first result: about 70% of KEV is invisible to any outside scan, and a homepage request can rank only a few percent. Needs a CPE-based pass (CISA Vulnrichment) with two independent raters. |
+| 2. Federal deadline | Modest | Every KEV entry has a due date, so the comparison generalizes, but measurable events arrive about monthly. BOD 26-04 deadlines can be 3 days, so a missed snapshot near a deadline loses that event. |
+| 3. Entity panel | Highest, with a trade-off | Counting every security release (PHP, httpd, nginx, SharePoint monthly updates) gives dozens of events a year, and every site running the product counts. New sub-questions: WordPress auto-updates security releases and PHP does not; one hosting provider may move many sites at once. Most releases are not known to be exploited, so frame it as a maintenance panel with KEV events flagged. |
+| 4. Coverage as method | Supporting | A per-product inventory puts numbers on how much each product hides (PHP: 42 of 198 PHP sites, 21%, show a version). The 70% invisible share is the strongest single argument. |
+| 5. Notification | Small, practical | The registry's security contact column (read by `src/frame.py`, counted in `data/frame_meta.json`) is a ready channel; check its fill rate. |
+| 6. Unsupported software | New | See above. |
+
+Edge devices (tier B) could be reached passively by finding government VPN hostnames in
+certificate transparency logs (crt.sh) and reading Censys research data, with no traffic
+from this study. High policy value, but a separate protocol and IRB check.
+
+## Government focus and novelty
+
+Applied to all public websites this would be incremental measurement work. The government
+focus is what makes three questions look unanswered (as far as the searches found):
+
+- **Pathway 1, scoped to government:** which exploited flaws an independent observer can
+  check on public bodies at all, which is an oversight and accountability question.
+- **Pathway 2:** whether state and local governments track a federal deadline that does
+  not bind them, i.e. whether federal policy spills over.
+- **Pathway 3:** no panel of public bodies across successive exploited flaws turned up;
+  the closest panel work is on consumer software.
+
+**Explaining, not just describing.** The .gov registry labels each domain's entity type
+(city, county, town, school district, election office). The U.S. Census Bureau's Census of
+Governments gives population, budget and type for every local government. Linking the two
+asks why some governments patch faster: size and resources, shared hosting or outsourced
+IT, or MS-ISAC membership if a list can be obtained. Commercial dashboards cannot do this
+because they do not know which hosts are governments; CISA could, but does not publish.
+
+**Where the focus adds less than it seems.** The University of Maryland county study
+already mapped local-government attack surface (one snapshot, not patching over time; the
+citation to position against). CISA Cyber Hygiene scans about 5,000 localities from a
+better vantage point; the answer is that this study is public, independent and
+reproducible. Bitsight's KEV data includes local governments without breaking them out.
+Pulse and Basisbeveiliging show public government maps exist, but neither tracks patching
+or covers U.S. nonfederal governments.
+
+**Risks the focus adds.** A per-town result is a target list (handled by aggregate-only,
+suppressed reporting, which is itself part of the method's novelty). Many small units have
+one site or none, which pushes toward the national frame. CISA or MS-ISAC may be wary of
+public comparisons between governments.
+
+**Venues.** Beyond IMC or PAM for the measurement paper: Government Information Quarterly,
+the Journal of Cybersecurity, TPRC and public-administration journals.
+
+## Priority order
+
+1. **Pathway 1, the KEV census.** Publishable without collecting more data.
+2. **Header inventory plus unsupported-software share (pathway 6).** Cheap; uses stored
+   headers; feeds pathways 3, 4 and 6. Notice update first.
+3. **Pathway 3, the all-releases panel.**
+4. **Pathway 2,** which builds up in the background as KEV events arrive.
+5. **Pathway 5,** when there is IRB capacity.
+
+Two limits apply throughout: header disclosure rates for products other than PHP are
+unknown until the inventory runs on real data, and Wisconsin alone may support only
+description, so most of the gains for pathways 1 and 3 assume the national frame.
+
 ## Related findings worth citing
 
 - Bitsight: median 174 days to fix a KEV-listed flaw vs. 621 days otherwise; the sample
@@ -130,4 +231,8 @@ strong the novelty claim looks.
 - Basisbeveiliging.nl: https://basisbeveiliging.nl/info/
 - nuclei-templates-ai: https://github.com/projectdiscovery/nuclei-templates-ai
 - Shadowserver dashboard terms: https://www.shadowserver.org/statistics/
+- CISA KEV catalog on GitHub: https://github.com/cisagov/kev-data
+- CISA Vulnerability Review FY2024-2025: https://www.cisa.gov/sites/default/files/2026-08/cisa-vulnerability-review-fy-2024-2025-508.pdf
+- endoflife.date API: https://endoflife.date/docs/api
+- U.S. Census Bureau, Census of Governments: https://www.census.gov/programs-surveys/cog.html
 - CISA Vulnrichment: https://github.com/cisagov/vulnrichment
