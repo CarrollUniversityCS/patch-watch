@@ -35,9 +35,6 @@ promise to a government site operator, or a silently changed result, is not.
 9. **Kill switch fixed.** It now has two trips: overload (>10% 429/5xx) and block rate
    (>30% 401/403). Fetch order is shuffled per run with a recorded seed (commit
    `a4339e4`).
-10. **The 201 domains contacted on 2026-10-23 must not be contacted again that day.**
-    The public notice promises at most three requests per domain per day. So **the first
-    live run on the host machine is 2026-10-24 at 09:00 America/Chicago**, not earlier.
 
 ## 1. Roles
 
@@ -124,8 +121,8 @@ PATCHWATCH_GATE_A=APPROVED
 PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin
 ```
 
-- **Snapshot days, 09:00 America/Chicago:** every day 2026-10-24 → 2026-11-04, then
-  11-11, 11-18, 12-05, 12-20 and 2027-01-19. That is 17 days.
+- **Snapshot days, 09:00 America/Chicago:** every day 2026-10-23 → 2026-11-04, then
+  11-11, 11-18, 12-05, 12-20 and 2027-01-19. That is 18 days.
 - **Each line chains the two regions:** `--region wisconsin ... && --region comparison
   ...`. Comparison runs only if Wisconsin exits 0.
 - **Remove every live line after the 2027-01-19 run.** Cron has no year, so leftover
@@ -195,13 +192,13 @@ allowed) and message Jack.
    - **No row exists for today:** the crash happened before any request (environment,
      path, dependency). Fix it under §6. Then you may run **that region once by hand**
      the same day, using the exact crontab command for it, and record that you did.
-2. Never re-run more than once a day, and never after 18:00 local.
+2. Never re-run more than once a day, and never after 19:00 local.
 
 ### 5.3 Missed run (machine asleep, cron didn't fire)
 
 If both the pre-run and post-run checks show no run for today, and the time is before
-18:00 local, run the day's chained crontab command **once** by hand, then do the
-post-run check. After 18:00, skip the day and tell Jack. Never run a missed day on a
+19:00 local, run the day's chained crontab command **once** by hand, then do the
+post-run check. After 19:00, skip the day and tell Jack. Never run a missed day on a
 later date.
 
 ### 5.4 Backup (after every snapshot day, and before any fix)

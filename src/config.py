@@ -61,7 +61,14 @@ MAX_SENDS_PER_DOMAIN = 3                # rule 2: 3 budget-charged PHASES, not r
                                         # hops are charged to the phase, not to this cap.
 
 # ---------------------------------------------------------------- kill switch (rule 6)
-KILL_ROLLING_WINDOW = 50
+KILL_ROLLING_WINDOW = 200
+# 2026-10-26: was 50. Raised by PI instruction after the 2026-10-24 comparison halt: the
+# run-wide 429/5xx rate was 2.1% (17/810) but 16 of those 17 were Cloudflare-fronted domains
+# failing together in millisecond clusters (three 502s within 5 ms), so a 50-outcome window
+# read one provider's bad minute as a sustained overload storm. At 2.1% a 200-outcome window
+# needs >20 bad in the last 200 to trip and did not. COST, accepted by the PI: a genuine
+# abuse storm now takes up to ~4x longer to notice. See
+# profile_docs/patch-watch/HALT_DIAGNOSIS_2026-10-24.md (admin copy, not in the repo).
 # Two trips over the same rolling window (plan §12, 2026-10-23):
 #  * OVERLOAD: >10% of outcomes are 429 or 5xx - signs we may be causing load.
 #  * BLOCK:    >30% of outcomes are 401/403 - our crawler is being refused broadly,

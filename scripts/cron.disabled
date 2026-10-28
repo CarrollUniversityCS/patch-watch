@@ -31,7 +31,7 @@
 #
 # ── live daily snapshot, S1 .. day 14 = 2026-11-04 (DO NOT UNCOMMENT BEFORE GATE A) ─
 # Set the start day to the actual S1 date when Gate A opens.
-# 0 9 24-31 10 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label "CMP_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
+# 0 9 23-31 10 *  cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label "CMP_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
 # 0 9 1-4 11 *    cd $PW && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region wisconsin --label "WI_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1 && .venv/bin/python -X utf8 scripts/run_snapshot.py --sample data/wi_frame.csv --region comparison --label "CMP_$(date +\%Y\%m\%d)" >> logs/cron.out 2>&1
 #
 # ── tapering: day 21 (11-11), 28 (11-18), 45 (12-05), 60 (12-20), 90 (2027-01-19) ───
