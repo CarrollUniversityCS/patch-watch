@@ -1,5 +1,7 @@
 # Hermes runbook: patch-watch live collection (bounded operator)
 
+> **2026-10-28 update:** read `docs/HERMES_UPDATE_2026-10-28.md` first. It replaces how the schedule runs on the Windows host and adds the 09:45 and 18:00 missed-day checks.
+
 **For:** the Hermes agent on Jack Forden's host machine. **Written:** 2026-10-23.
 **Owner and only decision-maker:** Jack Forden (jforden@carrollu.edu). Notification
 channel: **[NOTIFY]**, filled in by Jack at setup.
