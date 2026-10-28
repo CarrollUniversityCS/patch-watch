@@ -45,8 +45,8 @@ strong the novelty claim looks.
   flaws). State and local governments are not bound by it. What share of the nonfederal
   population has reached a fixed release by that date, and does the federal clock appear
   to pull them along?
-- **PHP2Shell.** KEV listing 2026-10-26, federal due 2026-10-29 (from Nextgov/FCW and a KEV
-  search excerpt; not yet verified against CISA's CSV). Wisconsin snapshots seen so far:
+- **PHP2Shell.** KEV listing 2026-10-26, federal due 2026-10-29 (verified 2026-10-28 against KEV
+  catalog version 2026.10.27). Wisconsin snapshots seen so far:
   days 3.0, 5.3 and 7.0. This question is written down on 2026-10-28, **before** any
   snapshot on or after the due date exists. It is still exploratory for PHP2Shell, since
   it is not in plan v1.0.
