@@ -154,3 +154,30 @@ def test_render_embeds_data_safely():
     assert json.loads(blob)["entries"][0]["why"] == "</script><b>x"
     frag = dashboard.render(m, dashboard.TEMPLATE_PATH.read_text(encoding="utf-8"), fragment=True)
     assert "<html" not in frag and "<title>Patch Watch</title>" in frag
+
+
+# ------------------------------------------------------------------ KEV
+KEV = {"added": "2026-10-26", "federal_due": "2026-10-28", "verified": False, "note": ""}
+
+
+@pytest.mark.parametrize("kev, msg", [
+    ({**KEV, "federal_due": "Oct 29"}, "federal_due"),
+    ({**KEV, "verified": "no"}, "verified"),
+])
+def test_catalog_rejects_bad_kev(tmp_path, kev, msg):
+    with pytest.raises(ValueError, match=msg):
+        dashboard.load_catalog(write_catalog(tmp_path, [entry(kev=kev)]))
+
+
+def test_snapshots_flagged_against_federal_due():
+    early = dashboard.parse_run_report(report({"PATCHED_UPSTREAM": 20}).replace(
+        "2026-10-28T14:00:17Z /", "2026-10-27T14:00:17Z /"))
+    on_day = dashboard.parse_run_report(report({"PATCHED_UPSTREAM": 20}))
+    m = dashboard.build_model([entry(kev=KEV)], [early, on_day])
+    flags = [p["after_federal_due"] for p in m["entries"][0]["regions"][0]["points"]]
+    assert flags == [False, True]
+
+
+def test_no_kev_means_no_flag():
+    _, p = model_for({"PATCHED_UPSTREAM": 20})
+    assert p["after_federal_due"] is False

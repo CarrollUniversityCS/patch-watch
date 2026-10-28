@@ -142,6 +142,7 @@ section { display: flex; flex-direction: column; gap: 16px; }
 .bar-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 150px; gap: 12px; align-items: center; }
 .bar-label { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .bar-label b { color: var(--ink); font-weight: 600; }
+.bar-label .due { display: block; font-size: 11.5px; color: var(--accent); font-weight: 600; }
 .bar { display: flex; gap: 2px; height: 22px; }
 .seg { height: 100%; min-width: 3px; cursor: default; }
 .seg:first-child { border-radius: 4px 0 0 4px; }
@@ -265,6 +266,10 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
         el("dt", { text: "Disclosed" }), el("dd", { text: e.disclosed || "date not recorded" }),
         el("dt", { text: "Signal" }), el("dd", { text: e.signal })
       ]);
+      if (e.kev) {
+        dl.appendChild(el("dt", { text: "Exploited" }));
+        dl.appendChild(el("dd", { text: "On CISA's KEV list since " + fmtDate(e.kev.added) + ". Federal deadline " + fmtDate(e.kev.federal_due) + (e.kev.verified ? "" : " (not yet verified against CISA's list)") }));
+      }
       var card = el("article", { class: "card" + (e.tier === "live" ? " is-live" : "") }, [
         el("h3", { text: e.title }),
         el("div", { class: "ids mono", text: ids }),
@@ -310,6 +315,7 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
     panel.appendChild(el("div", { class: "panel-head" }, [
       el("div", { class: "eyebrow", text: "Live · disclosed " + fmtDate(e.t0_utc) }),
       el("h2", { id: e.key + "-h", text: e.title }),
+      e.kev ? el("p", { class: "muted", text: "On CISA's Known Exploited Vulnerabilities list since " + fmtDate(e.kev.added) + ". Federal civilian agencies must patch by " + fmtDate(e.kev.federal_due) + "; state and local governments are not bound by that date, so bars on or after it show how they compare." + (e.kev.verified ? "" : " Dates not yet verified against CISA's list.") }) : null,
       el("div", { class: "mono muted", text: e.cve_ids.join(" · ") })
     ]));
 
@@ -378,7 +384,7 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
           bar.appendChild(none);
         }
         bars.appendChild(el("div", { class: "bar-row" }, [
-          el("div", { class: "bar-label", html: "<b>Day " + p.day.toFixed(1) + "</b> · " + fmtDate(p.started) }),
+          el("div", { class: "bar-label", html: "<b>Day " + p.day.toFixed(1) + "</b> · " + fmtDate(p.started) + (p.after_federal_due ? "<span class=\"due\">past federal deadline</span>" : "") }),
           bar,
           el("div", { class: "bar-end", html: p.patched_share === "\u00a7" ? "Patched share withheld" : p.patched_share === "\u2013" ? "No ranked versions" : "<b>" + p.patched_share + "</b> patched of visible" })
         ]));

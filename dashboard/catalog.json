@@ -1,5 +1,5 @@
 {
-  "_comment": "Vulnerability intake for the dashboard. One entry per vulnerability or event. 'tier' is the triage verdict and must be one of dashboard.TIERS. A 'live' or 'archive_only' entry names a published PatchEvent in src/versions.py by 'event'; an 'awaiting_fix' entry may name an unpublished one. Add entries here by hand or from the triage agent; a human reviews every tier change before it is committed.",
+  "_comment": "Vulnerability intake for the dashboard. One entry per vulnerability or event. 'tier' is the triage verdict and must be one of dashboard.TIERS. A 'live' or 'archive_only' entry names a published PatchEvent in src/versions.py by 'event'; an 'awaiting_fix' entry may name an unpublished one. Add entries here by hand or from the triage agent; a human reviews every tier change before it is committed. Optional 'kev': CISA KEV listing, {added, federal_due (YYYY-MM-DD), verified (true only once checked against the KEV CSV), note}.",
   "entries": [
     {
       "key": "php2shell",
@@ -11,7 +11,14 @@
       "event": "php2shell",
       "signal": "PHP version in the X-Powered-By or Server header of one homepage GET",
       "why": "The fixed releases (8.2.35, 8.3.36, 8.4.27, 8.5.12) change the version string, so a disclosed version ranks against them. Hidden versions and distro backports stay indeterminate.",
-      "sources": ["https://www.php.net/archive/2026.php#2026-10-21-5"]
+      "kev": {
+        "added": "2026-10-26",
+        "federal_due": "2026-10-29",
+        "verified": false,
+        "note": "Dates from Nextgov/FCW (2026-10-27) and a search snippet of the KEV catalog for CVE-2026-109619; not yet checked against CISA's KEV CSV, which this session could not reach."
+      },
+      "sources": ["https://www.php.net/archive/2026.php#2026-10-21-5",
+                  "https://www.nextgov.com/cybersecurity/2026/10/cisa-gives-federal-agencies-until-thursday-address-exploited-php-flaws/416838/"]
     },
     {
       "key": "cve_2026_115560",

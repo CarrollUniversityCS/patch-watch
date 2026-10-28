@@ -70,6 +70,13 @@ def load_catalog(path: Path = CATALOG_PATH) -> list[dict[str, Any]]:
         ev = e.get("event")
         if ev is not None and ev not in versions.EVENTS:
             raise ValueError(f"catalog: {k!r} names unknown event {ev!r}")
+        kev = e.get("kev")
+        if kev is not None:
+            for f in ("added", "federal_due"):
+                if not _DATE.match(str(kev.get(f, ""))):
+                    raise ValueError(f"catalog: {k!r} kev.{f} must be YYYY-MM-DD")
+            if not isinstance(kev.get("verified"), bool):
+                raise ValueError(f"catalog: {k!r} kev.verified must be true or false")
         if e["tier"] in ("live", "archive_only"):
             if ev is None:
                 raise ValueError(f"catalog: {k!r} is {e['tier']} but names no event")
@@ -77,6 +84,7 @@ def load_catalog(path: Path = CATALOG_PATH) -> list[dict[str, Any]]:
     return entries
 
 
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _LABEL = re.compile(r"^- snapshot label: `([^`]*)`(.*)$")
 _STARTED = re.compile(r"^- started / finished \(UTC\): (\S+)")
 _SAMPLE = re.compile(r"^- domains in sample: (\d+)")
@@ -171,6 +179,11 @@ def build_model(entries: list[dict[str, Any]], runs: list[dict[str, Any]], *,
             e["regions"] = [{"region": k, "points": v} for k, v in
                             sorted(by_region.items(), key=lambda kv: kv[0] != "wisconsin")]
             e["t0_utc"] = pipeline_event.t0_utc
+            # A snapshot taken on or after the federal KEV due date (UTC calendar day).
+            due = (e.get("kev") or {}).get("federal_due")
+            for rg in e["regions"]:
+                for p in rg["points"]:
+                    p["after_federal_due"] = bool(due) and p["started"][:10] >= due
         out_entries.append(e)
     commit, dirty = _commit()
     return {
