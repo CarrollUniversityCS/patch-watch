@@ -1,0 +1,53 @@
+{
+  "_comment": "Vulnerability intake for the dashboard. One entry per vulnerability or event. 'tier' is the triage verdict and must be one of dashboard.TIERS. A 'live' or 'archive_only' entry names a published PatchEvent in src/versions.py by 'event'; an 'awaiting_fix' entry may name an unpublished one. Add entries here by hand or from the triage agent; a human reviews every tier change before it is committed.",
+  "entries": [
+    {
+      "key": "php2shell",
+      "title": "PHP2Shell",
+      "cve_ids": ["CVE-2026-109618", "CVE-2026-109619"],
+      "component": "PHP (php-src), Apache mod_php highest risk",
+      "disclosed": "2026-10-21",
+      "tier": "live",
+      "event": "php2shell",
+      "signal": "PHP version in the X-Powered-By or Server header of one homepage GET",
+      "why": "The fixed releases (8.2.35, 8.3.36, 8.4.27, 8.5.12) change the version string, so a disclosed version ranks against them. Hidden versions and distro backports stay indeterminate.",
+      "sources": ["https://www.php.net/archive/2026.php#2026-10-21-5"]
+    },
+    {
+      "key": "cve_2026_115560",
+      "title": "PHP session upload progress",
+      "cve_ids": ["CVE-2026-115560"],
+      "component": "PHP (php-src)",
+      "disclosed": "",
+      "tier": "awaiting_fix",
+      "event": "cve_2026_115560",
+      "signal": "Same PHP version header as PHP2Shell, once a fixed release exists",
+      "why": "Pre-registered as threshold T2 (analysis plan §5.2). php.net says the fix ships in the next regular release, which is not out yet, so there is nothing to rank against.",
+      "sources": ["https://www.php.net/archive/2026.php"]
+    },
+    {
+      "key": "cve_2024_4577",
+      "title": "PHP-CGI argument injection",
+      "cve_ids": ["CVE-2024-4577"],
+      "component": "PHP-CGI on Windows (some locales)",
+      "disclosed": "2024-06-06",
+      "tier": "archive_only",
+      "event": "cve_2024_4577",
+      "signal": "PHP version header in archived Common Crawl captures",
+      "why": "A 2024 adoption benchmark read from the archive only. Exposure needed Windows PHP-CGI, which a header cannot show, so it measures how fast sites adopt a release rather than how exposed they were.",
+      "sources": ["https://github.com/php/php-src/security/advisories/GHSA-3qgc-jrrr-25jv"]
+    },
+    {
+      "key": "edk2_uefi_2026_10",
+      "title": "TianoCore EDK II firmware flaw",
+      "cve_ids": [],
+      "component": "UEFI firmware built on EDK II (AMI, Insyde, Phoenix, Project Mu)",
+      "disclosed": "2026-10",
+      "tier": "not_measurable",
+      "event": null,
+      "signal": "None from the network",
+      "why": "Firmware does not reveal its version to a web request. Reading it needs local access (dmidecode, fwupd) or a management interface (Redfish, IPMI), both outside a passive design. CVE ID not yet recorded here.",
+      "sources": ["Ars Technica report shared 2026-10-28 (URL not recorded)"]
+    }
+  ]
+}

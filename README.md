@@ -45,6 +45,7 @@ sites hide it, and distros can backport a fix without changing the version strin
 | `src/classify.py` | Header/version evidence → one of nine classes (including `NOT_MEASURED`), each with a reason string, against any `PatchEvent`. |
 | `src/detect.py` | Version normalisation, change events between snapshots, flapping vs. real upgrades. |
 | `src/db.py` | SQLite schema and writes: `domains`, `runs`, `observations`, `request_ledger`, `patch_events`, `meta`. |
+| `src/dashboard.py` | The static dashboard: `dashboard/catalog.json` (every vulnerability triaged so far, by measurability tier) plus each live event's patch state, drawn from the committed run reports with the same suppression as `analyze.py`. Writes `dashboard/index.html` from `dashboard/template.html`. A view, not an outcome: domain counts, no network, no database. |
 | `src/pipeline.py` | One snapshot end to end: preflight → fetch → classify → store → diff → audit → summary. |
 | `scripts/run_snapshot.py` | The wrapper a cron line calls. |
 | `scripts/cron.disabled` | The schedule, deliberately commented out (Stage 4 says install it disabled). |
@@ -81,6 +82,12 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 # 5. the pre-registered analysis (suppressed; --unsuppressed writes to data/ for the PI)
 .venv/bin/python -X utf8 src/analyze.py --label WI_d14
+```
+
+```bash
+# 6. the dashboard (reads dashboard/catalog.json and reports/run_*.md; no network)
+.venv/bin/python -X utf8 src/dashboard.py                 # -> dashboard/index.html
+.venv/bin/python -X utf8 src/dashboard.py --unsuppressed  # -> data/, PI only
 ```
 
 Read `docs/OPERATIONS.md` before running anything live: the gate requires both
