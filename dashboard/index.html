@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<!--FRAGMENT-START-->
+<title>Patch Watch</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column; intake as a ladder of tiers, then one panel per live event. */
+:root {
+  --bg: #f5f6f7;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4a5663;
+  --ink-3: #6f7a86;
+  --rule: #dde1e6;
+  --accent: #1d4f7a;
+  --accent-soft: #e5edf5;
+  --st-patched: #0ca30c;
+  --st-exposed: #d03b3b;
+  --st-eol: #ec835a;
+  --st-ambiguous: #fab219;
+  --st-hidden: #b9c0c8;
+  --st-withheld: #8a939d;
+  --font-display: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171c; --surface: #1a2027; --ink: #eef1f4; --ink-2: #b8c1ca; --ink-3: #8c97a3;
+    --rule: #2d3640; --accent: #8cb8e0; --accent-soft: #1f2d3a;
+    --st-hidden: #4f5964; --st-withheld: #77828e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171c; --surface: #1a2027; --ink: #eef1f4; --ink-2: #b8c1ca; --ink-3: #8c97a3;
+  --rule: #2d3640; --accent: #8cb8e0; --accent-soft: #1f2d3a;
+  --st-hidden: #4f5964; --st-withheld: #77828e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 var(--font-body);
+}
+.wrap {
+  max-width: 1120px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+  display: flex; flex-direction: column; gap: 40px;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 20px; font-weight: 650; }
+h3 { font-size: 15px; font-weight: 600; }
+p { margin: 0; }
+.mono { font-family: var(--font-data); font-size: 12.5px; }
+.eyebrow {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.muted { color: var(--ink-2); }
+.fine { color: var(--ink-3); font-size: 13px; }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible, .seg:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* header */
+header { display: flex; flex-direction: column; gap: 10px; }
+header .lede { max-width: 68ch; color: var(--ink-2); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.banner {
+  border: 1px solid var(--rule); background: var(--surface); border-radius: 6px;
+  padding: 10px 14px; font-size: 13.5px; color: var(--ink-2); max-width: 80ch;
+}
+.banner strong { color: var(--ink); }
+.banner.warn { border-color: var(--st-exposed); }
+
+/* intake ladder */
+section { display: flex; flex-direction: column; gap: 16px; }
+.section-head { display: flex; flex-direction: column; gap: 4px; }
+.section-head p { max-width: 70ch; }
+.ladder { display: flex; flex-direction: column; border-top: 1px solid var(--rule); }
+.tier {
+  display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px;
+  padding-block: 14px; border-bottom: 1px solid var(--rule);
+}
+.tier-head { display: flex; flex-direction: column; gap: 3px; }
+.tier-name { display: flex; align-items: baseline; gap: 8px; font-weight: 600; }
+.tier-count {
+  font-family: var(--font-data); font-size: 12px; font-weight: 500;
+  background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 0 8px;
+}
+.tier-blurb { font-size: 13px; color: var(--ink-3); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.empty { color: var(--ink-3); font-size: 13.5px; align-self: center; }
+.card {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.card.is-live { border-color: var(--accent); }
+.card .ids { color: var(--ink-2); overflow-wrap: anywhere; }
+.card dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; font-size: 13px; }
+.card dt { color: var(--ink-3); }
+.card dd { margin: 0; color: var(--ink-2); }
+.card .why { font-size: 13px; color: var(--ink-2); }
+.card a.jump { font-size: 13px; font-weight: 600; text-decoration: none; }
+.card a.jump:hover { text-decoration: underline; }
+
+/* live panels */
+.panel {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 20px; display: flex; flex-direction: column; gap: 22px; scroll-margin-top: 16px;
+}
+.panel-head { display: flex; flex-direction: column; gap: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { border-top: 2px solid var(--rule); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.tile.key { border-top-color: var(--st-patched); }
+.tile .v { font-family: var(--font-display); font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile .l { font-size: 13px; color: var(--ink-2); }
+.funnel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; font-size: 13px; color: var(--ink-2); }
+.funnel b { font-family: var(--font-data); font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.funnel .arrow { color: var(--ink-3); padding-inline: 4px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; flex: none; display: inline-block; }
+
+.region { display: flex; flex-direction: column; gap: 8px; }
+.region-name { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bars { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 150px; gap: 12px; align-items: center; }
+.bar-label { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.bar-label b { color: var(--ink); font-weight: 600; }
+.bar { display: flex; gap: 2px; height: 22px; }
+.seg { height: 100%; min-width: 3px; cursor: default; }
+.seg:first-child { border-radius: 4px 0 0 4px; }
+.seg:last-child { border-radius: 0 4px 4px 0; }
+.seg:only-child { border-radius: 4px; }
+.bar-end { font-size: 13px; color: var(--ink-2); }
+.bar-end b { color: var(--ink); font-family: var(--font-data); font-weight: 500; }
+.axis { display: grid; grid-template-columns: 112px minmax(0, 1fr) 150px; gap: 12px; }
+.axis-ticks { position: relative; height: 16px; font-size: 11px; color: var(--ink-3); font-family: var(--font-data); }
+.axis-ticks span { position: absolute; transform: translateX(-50%); }
+.axis-ticks span:first-child { transform: none; }
+.axis-ticks span:last-child { transform: translateX(-100%); }
+
+.hatch {
+  background-image: repeating-linear-gradient(45deg, var(--st-withheld) 0 2px, transparent 2px 5px);
+  background-color: var(--st-hidden);
+}
+.caveat { font-size: 13px; color: var(--ink-2); max-width: 78ch; border-left: 2px solid var(--rule); padding-left: 12px; }
+
+details.table-view summary { cursor: pointer; font-size: 13.5px; color: var(--accent); font-weight: 600; }
+.tbl-wrap { overflow-x: auto; margin-top: 10px; }
+table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 640px; width: 100%; }
+th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+th { font-weight: 600; color: var(--ink-2); font-size: 12px; }
+
+#tip {
+  position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--bg);
+  font-size: 12.5px; padding: 6px 9px; border-radius: 5px; max-width: 260px; line-height: 1.4;
+}
+footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: column; gap: 4px; max-width: 80ch; }
+
+@media (max-width: 760px) {
+  h1 { font-size: 25px; }
+  .tier { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bar-row, .axis { grid-template-columns: 74px minmax(0, 1fr); }
+  .bar-end { grid-column: 2; margin-top: -2px; }
+  .axis > :last-child { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .seg { transition: filter 120ms; }
+}
+.seg:hover, .seg:focus-visible { filter: brightness(1.12); }
+</style>
+
+<div class="wrap" id="app">
+  <header>
+    <div class="eyebrow">Carroll University · passive measurement</div>
+    <h1>Patch Watch</h1>
+    <p class="lede">Every vulnerability we have triaged, sorted by whether it can be measured from outside, and the patch state of Wisconsin's nonfederal .gov websites for each one we measure. Each site gets one ordinary homepage request per snapshot.</p>
+    <div class="meta fine" id="meta"></div>
+  </header>
+  <noscript><p class="banner">This page draws its charts with JavaScript. The same numbers are in the run reports under <span class="mono">reports/</span>.</p></noscript>
+</div>
+<div id="tip" hidden></div>
+
+<script type="application/json" id="pw-data">{"generated_utc": "2026-10-28T18:12:57Z", "commit": "50dec19", "dirty": false, "suppressed": true, "tiers": [{"key": "live", "label": "Live", "blurb": "Approved at Gate A and measured on every snapshot."}, {"key": "validating", "label": "Detector in validation", "blurb": "A detector exists and must pass the test matrix before Gate A."}, {"key": "awaiting_fix", "label": "Awaiting a fixed release", "blurb": "Measurable, but there is no fixed version to rank against yet."}, {"key": "archive_only", "label": "Archive only", "blurb": "Read from Common Crawl captures; no live requests."}, {"key": "not_measurable", "label": "Not remotely measurable", "blurb": "Leaves no passive fingerprint in an ordinary web response."}, {"key": "untriaged", "label": "Untriaged", "blurb": "In the intake, not yet reviewed."}], "entries": [{"key": "php2shell", "title": "PHP2Shell", "cve_ids": ["CVE-2026-109618", "CVE-2026-109619"], "component": "PHP (php-src), Apache mod_php highest risk", "disclosed": "2026-10-21", "tier": "live", "event": "php2shell", "signal": "PHP version in the X-Powered-By or Server header of one homepage GET", "why": "The fixed releases (8.2.35, 8.3.36, 8.4.27, 8.5.12) change the version string, so a disclosed version ranks against them. Hidden versions and distro backports stay indeterminate.", "sources": ["https://www.php.net/archive/2026.php#2026-10-21-5"], "regions": [{"region": "wisconsin", "points": [{"run_id": "R20261024T140014Z_WI_20261024", "label": "WI_20261024", "started": "2026-10-24T14:00:14Z", "day": 3.0, "cells": {"PATCHED": "28", "EXPOSED": "<10", "EOL": "§", "AMBIGUOUS": "0", "OPAQUE": "155"}, "shown": {"PATCHED": 28, "AMBIGUOUS": 0, "OPAQUE": 155}, "P": "197", "P_n": 197, "withheld": 14, "funnel": {"domains": "833", "reached": "654", "php": "197", "visible": "42"}, "patched_share": "67%", "exposed": "14"}, {"run_id": "R20261026T215239Z_WI_20261026", "label": "WI_20261026", "started": "2026-10-26T21:52:39Z", "day": 5.3, "cells": {"PATCHED": "31", "EXPOSED": "0", "EOL": "10", "AMBIGUOUS": "0", "OPAQUE": "151"}, "shown": {"PATCHED": 31, "EXPOSED": 0, "EOL": 10, "AMBIGUOUS": 0, "OPAQUE": 151}, "P": "192", "P_n": 192, "withheld": 0, "funnel": {"domains": "833", "reached": "649", "php": "192", "visible": "41"}, "patched_share": "76%", "exposed": "10"}, {"run_id": "R20261028T140016Z_WI_20261028", "label": "WI_20261028", "started": "2026-10-28T14:00:17Z", "day": 7.0, "cells": {"PATCHED": "32", "EXPOSED": "0", "EOL": "10", "AMBIGUOUS": "0", "OPAQUE": "156"}, "shown": {"PATCHED": 32, "EXPOSED": 0, "EOL": 10, "AMBIGUOUS": 0, "OPAQUE": 156}, "P": "198", "P_n": 198, "withheld": 0, "funnel": {"domains": "833", "reached": "652", "php": "198", "visible": "42"}, "patched_share": "76%", "exposed": "10"}]}, {"region": "comparison", "points": [{"run_id": "R20261024T140522Z_CMP_20261024", "label": "CMP_20261024", "started": "2026-10-24T14:05:22Z", "day": 3.0, "cells": {"PATCHED": "<10", "EXPOSED": "<10", "EOL": "<10", "AMBIGUOUS": "0", "OPAQUE": "191"}, "shown": {"AMBIGUOUS": 0, "OPAQUE": 191}, "P": "212", "P_n": 212, "withheld": 21, "funnel": {"domains": "1961", "reached": "513", "php": "212", "visible": "21"}, "patched_share": "§", "exposed": "14"}]}], "t0_utc": "2026-10-21T14:00:00Z"}, {"key": "cve_2026_115560", "title": "PHP session upload progress", "cve_ids": ["CVE-2026-115560"], "component": "PHP (php-src)", "disclosed": "", "tier": "awaiting_fix", "event": "cve_2026_115560", "signal": "Same PHP version header as PHP2Shell, once a fixed release exists", "why": "Pre-registered as threshold T2 (analysis plan §5.2). php.net says the fix ships in the next regular release, which is not out yet, so there is nothing to rank against.", "sources": ["https://www.php.net/archive/2026.php"]}, {"key": "cve_2024_4577", "title": "PHP-CGI argument injection", "cve_ids": ["CVE-2024-4577"], "component": "PHP-CGI on Windows (some locales)", "disclosed": "2024-06-06", "tier": "archive_only", "event": "cve_2024_4577", "signal": "PHP version header in archived Common Crawl captures", "why": "A 2024 adoption benchmark read from the archive only. Exposure needed Windows PHP-CGI, which a header cannot show, so it measures how fast sites adopt a release rather than how exposed they were.", "sources": ["https://github.com/php/php-src/security/advisories/GHSA-3qgc-jrrr-25jv"]}, {"key": "edk2_uefi_2026_10", "title": "TianoCore EDK II firmware flaw", "cve_ids": [], "component": "UEFI firmware built on EDK II (AMI, Insyde, Phoenix, Project Mu)", "disclosed": "2026-10", "tier": "not_measurable", "event": null, "signal": "None from the network", "why": "Firmware does not reveal its version to a web request. Reading it needs local access (dmidecode, fwupd) or a management interface (Redfish, IPMI), both outside a passive design. CVE ID not yet recorded here.", "sources": ["Ars Technica report shared 2026-10-28 (URL not recorded)"]}]}</script>
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("pw-data").textContent);
+  var app = document.getElementById("app");
+
+  var STATE = {
+    PATCHED:   { label: "Patched", note: "version at or above the fixed release", icon: "✓", cls: "--st-patched" },
+    EXPOSED:   { label: "Exposed", note: "version below the fixed release", icon: "✕", cls: "--st-exposed" },
+    EOL:       { label: "End-of-life branch", note: "PHP 8.1 or older, no official fix", icon: "!", cls: "--st-eol" },
+    AMBIGUOUS: { label: "Ambiguous", note: "distro build that may be backported, or an unparseable version", icon: "?", cls: "--st-ambiguous" },
+    OPAQUE:    { label: "Version hidden", note: "PHP is present but the version is not disclosed", icon: "–", cls: "--st-hidden" }
+  };
+  var ORDER = ["PATCHED", "EXPOSED", "EOL", "AMBIGUOUS", "OPAQUE"];
+  var REGION = { wisconsin: "Wisconsin", comparison: "Comparison states (MN, IL, MI, IA)" };
+
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    if (attrs) for (var k in attrs) {
+      if (k === "text") n.textContent = attrs[k];
+      else if (k === "html") n.innerHTML = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    }
+    (kids || []).forEach(function (c) { if (c) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+    return n;
+  }
+  function fmtDate(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? iso : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  }
+
+  // ---- header meta
+  var meta = document.getElementById("meta");
+  meta.appendChild(el("span", { text: "Generated " + D.generated_utc.replace("T", " ").replace("Z", " UTC") }));
+  meta.appendChild(el("span", { html: "Code <span class=\"mono\">" + D.commit + "</span>" + (D.dirty ? " (uncommitted changes)" : "") }));
+  meta.appendChild(el("span", { text: "Counts are domains" }));
+  if (D.suppressed) {
+    meta.appendChild(el("span", { text: "Counts 1–9 shown as <10" }));
+  } else {
+    app.insertBefore(el("p", { class: "banner warn", html: "<strong>Unsuppressed.</strong> Raw counts for the principal investigator. Do not publish or share this file." }), app.children[1]);
+  }
+
+  // ---- intake ladder
+  var byTier = {};
+  D.entries.forEach(function (e) { (byTier[e.tier] = byTier[e.tier] || []).push(e); });
+  var measurable = (byTier.live || []).length;
+  var intake = el("section", { "aria-labelledby": "intake-h" }, [
+    el("div", { class: "section-head" }, [
+      el("div", { class: "eyebrow", text: "Intake" }),
+      el("h2", { id: "intake-h", text: "Vulnerabilities, by how measurable they are" }),
+      el("p", { class: "muted", text: D.entries.length + " triaged so far, " + measurable + " measured live. Most vulnerabilities leave no trace in an ordinary web response, so they stop at a lower tier and are kept here rather than dropped." })
+    ])
+  ]);
+  var ladder = el("div", { class: "ladder" });
+  D.tiers.forEach(function (t) {
+    var items = byTier[t.key] || [];
+    var cards = el("div", { class: "cards" });
+    if (!items.length) cards.appendChild(el("p", { class: "empty", text: "None yet." }));
+    items.forEach(function (e) {
+      var ids = e.cve_ids.length ? e.cve_ids.join(" · ") : "CVE ID not recorded";
+      var dl = el("dl", null, [
+        el("dt", { text: "Component" }), el("dd", { text: e.component }),
+        el("dt", { text: "Disclosed" }), el("dd", { text: e.disclosed || "date not recorded" }),
+        el("dt", { text: "Signal" }), el("dd", { text: e.signal })
+      ]);
+      var card = el("article", { class: "card" + (e.tier === "live" ? " is-live" : "") }, [
+        el("h3", { text: e.title }),
+        el("div", { class: "ids mono", text: ids }),
+        dl,
+        el("p", { class: "why", text: e.why })
+      ]);
+      if (e.regions) card.appendChild(el("a", { class: "jump", href: "#" + e.key, text: "See patch state ↓" }));
+      cards.appendChild(card);
+    });
+    ladder.appendChild(el("div", { class: "tier" }, [
+      el("div", { class: "tier-head" }, [
+        el("div", { class: "tier-name" }, [t.label, el("span", { class: "tier-count", text: String(items.length) })]),
+        el("div", { class: "tier-blurb", text: t.blurb })
+      ]),
+      cards
+    ]));
+  });
+  intake.appendChild(ladder);
+  app.appendChild(intake);
+
+  // ---- tooltip
+  var tip = document.getElementById("tip");
+  function showTip(evt, text) {
+    tip.textContent = text; tip.hidden = false;
+    var r = evt.target.getBoundingClientRect();
+    var x = (evt.clientX || (r.left + r.width / 2)) + 12, y = (evt.clientY || r.top) + 14;
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    if (x + w > window.innerWidth - 8) x = window.innerWidth - w - 8;
+    if (y + h > window.innerHeight - 8) y = (evt.clientY || r.top) - h - 10;
+    tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+  }
+  function hideTip() { tip.hidden = true; }
+
+  function swatch(state) {
+    var s = el("i", { class: "sw", "aria-hidden": "true" });
+    s.style.background = "var(" + STATE[state].cls + ")";
+    return s;
+  }
+
+  // ---- live panels
+  D.entries.filter(function (e) { return e.regions; }).forEach(function (e) {
+    var panel = el("section", { class: "panel", id: e.key, "aria-labelledby": e.key + "-h" });
+    panel.appendChild(el("div", { class: "panel-head" }, [
+      el("div", { class: "eyebrow", text: "Live · disclosed " + fmtDate(e.t0_utc) }),
+      el("h2", { id: e.key + "-h", text: e.title }),
+      el("div", { class: "mono muted", text: e.cve_ids.join(" · ") })
+    ]));
+
+    var primary = e.regions[0], last = primary && primary.points[primary.points.length - 1];
+    if (!last) {
+      panel.appendChild(el("p", { class: "muted", text: "No live snapshots yet." }));
+      app.appendChild(panel);
+      return;
+    }
+    var tiles = el("div", { class: "tiles" }, [
+      tile(last.patched_share === "\u00a7" ? "Withheld" : last.patched_share, "patched, of " + REGION[primary.region] + " sites showing a version", true),
+      tile(last.exposed, "exposed or on an end-of-life branch"),
+      tile(last.cells.OPAQUE, "run PHP but hide the version"),
+      tile("Day " + last.day.toFixed(1), "since disclosure, snapshot of " + fmtDate(last.started))
+    ]);
+    panel.appendChild(tiles);
+    panel.appendChild(el("div", { class: "funnel", "aria-label": "Coverage at the latest " + REGION[primary.region] + " snapshot" }, [
+      el("b", { text: last.funnel.domains }), " domains", el("span", { class: "arrow", text: "→" }),
+      el("b", { text: last.funnel.reached }), " answered", el("span", { class: "arrow", text: "→" }),
+      el("b", { text: last.funnel.php }), " show PHP", el("span", { class: "arrow", text: "→" }),
+      el("b", { text: last.funnel.visible }), " show a version we can rank"
+    ]));
+
+    var legend = el("div", { class: "legend", role: "list" });
+    ORDER.forEach(function (s) {
+      legend.appendChild(el("span", { role: "listitem", title: STATE[s].note }, [swatch(s), STATE[s].icon + " " + STATE[s].label]));
+    });
+    if (D.suppressed) {
+      var hs = el("i", { class: "sw hatch", "aria-hidden": "true" });
+      legend.appendChild(el("span", { role: "listitem" }, [hs, "Withheld (cells under 10, pooled)"]));
+    }
+    panel.appendChild(legend);
+
+    e.regions.forEach(function (rg) {
+      var box = el("div", { class: "region" });
+      box.appendChild(el("div", { class: "region-name" }, [
+        el("h3", { text: REGION[rg.region] || rg.region }),
+        el("span", { class: "fine", text: "share of domains with PHP evidence, one bar per snapshot" })
+      ]));
+      var bars = el("div", { class: "bars" });
+      rg.points.forEach(function (p) {
+        var bar = el("div", { class: "bar", role: "img", "aria-label": barLabel(p) });
+        if (p.P_n) {
+          ORDER.forEach(function (s) {
+            var n = p.shown[s];
+            if (!n) return;
+            var seg = el("span", { class: "seg", tabindex: "0" });
+            seg.style.flex = n + " 0 0";
+            seg.style.background = "var(" + STATE[s].cls + ")";
+            var txt = STATE[s].icon + " " + STATE[s].label + ": " + n + " of " + p.P_n + " (" + Math.round(100 * n / p.P_n) + "%). " + STATE[s].note + ".";
+            hook(seg, txt);
+            bar.appendChild(seg);
+          });
+          if (p.withheld > 0) {
+            var w = el("span", { class: "seg hatch", tabindex: "0" });
+            w.style.flex = p.withheld + " 0 0";
+            var hidden = ORDER.filter(function (s) { return !(s in p.shown) && p.cells[s] !== "0"; })
+              .map(function (s) { return STATE[s].label; });
+            hook(w, "Withheld: " + p.withheld + " domains across " + hidden.join(", ") + ", each under 10 or held back so the others cannot be worked out.");
+            bar.appendChild(w);
+          }
+        } else {
+          var none = el("span", { class: "seg hatch", tabindex: "0" });
+          none.style.flex = "1 0 0";
+          hook(none, "Fewer than 10 domains with PHP evidence; withheld.");
+          bar.appendChild(none);
+        }
+        bars.appendChild(el("div", { class: "bar-row" }, [
+          el("div", { class: "bar-label", html: "<b>Day " + p.day.toFixed(1) + "</b> · " + fmtDate(p.started) }),
+          bar,
+          el("div", { class: "bar-end", html: p.patched_share === "\u00a7" ? "Patched share withheld" : p.patched_share === "\u2013" ? "No ranked versions" : "<b>" + p.patched_share + "</b> patched of visible" })
+        ]));
+      });
+      bars.appendChild(el("div", { class: "axis", "aria-hidden": "true" }, [
+        el("span"),
+        el("div", { class: "axis-ticks" }, [el("span", { style: "left:0", text: "0%" }), el("span", { style: "left:50%", text: "50%" }), el("span", { style: "left:100%", text: "100%" })]),
+        el("span")
+      ]));
+      box.appendChild(bars);
+      panel.appendChild(box);
+    });
+
+    panel.appendChild(el("p", { class: "caveat", text: "A hidden version does not mean a site is patched, and a distro build can carry the fix without changing its version string. Those sites stay in their own segments and are left out of the patched share. These are domain counts from each run report; the pre-registered entity-level analysis is in reports/analysis_*.md." }));
+    panel.appendChild(tableView(e));
+    app.appendChild(panel);
+  });
+
+  function tile(v, label, key) {
+    return el("div", { class: "tile" + (key ? " key" : "") }, [el("div", { class: "v", text: v }), el("div", { class: "l", text: label })]);
+  }
+  function barLabel(p) {
+    if (!p.P_n) return "Day " + p.day.toFixed(1) + ": withheld, fewer than 10 domains with PHP evidence.";
+    return "Day " + p.day.toFixed(1) + ", " + p.P + " domains with PHP evidence: " +
+      ORDER.map(function (s) { return STATE[s].label + " " + p.cells[s]; }).join(", ") + ". Patched share of visible versions " + p.patched_share + ".";
+  }
+  function hook(node, text) {
+    node.addEventListener("mouseenter", function (ev) { showTip(ev, text); });
+    node.addEventListener("mousemove", function (ev) { showTip(ev, text); });
+    node.addEventListener("mouseleave", hideTip);
+    node.addEventListener("focus", function (ev) { showTip(ev, text); });
+    node.addEventListener("blur", hideTip);
+  }
+  function tableView(e) {
+    var head = ["Region", "Snapshot", "Day", "Domains", "Answered", "PHP"].concat(ORDER.map(function (s) { return STATE[s].label; }), ["Patched of visible"]);
+    var rows = [];
+    e.regions.forEach(function (rg) {
+      rg.points.forEach(function (p) {
+        rows.push([REGION[rg.region] || rg.region, p.label, p.day.toFixed(1), p.funnel.domains, p.funnel.reached, p.P]
+          .concat(ORDER.map(function (s) { return p.cells[s]; }), [p.patched_share]));
+      });
+    });
+    var table = el("table", null, [
+      el("thead", null, [el("tr", null, head.map(function (h) { return el("th", { scope: "col", text: h }); }))]),
+      el("tbody", null, rows.map(function (r) { return el("tr", null, r.map(function (c) { return el("td", { text: String(c) }); })); }))
+    ]);
+    return el("details", { class: "table-view" }, [el("summary", { text: "Show the numbers as a table" }), el("div", { class: "tbl-wrap" }, [table])]);
+  }
+
+  app.appendChild(el("footer", null, [
+    el("p", { text: "Passive only: one homepage GET per domain per snapshot, with a declared user agent and published rate limits. Tribal nations' sites are not measured. Per-domain results go only to the principal investigator." }),
+    el("p", { text: "Opt out by emailing jforden@carrollu.edu with your domain. It is removed within 24 hours." })
+  ]));
+})();
+</script>
+<!--FRAGMENT-END-->
+</body>
+</html>
