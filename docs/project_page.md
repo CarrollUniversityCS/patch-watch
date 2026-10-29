@@ -69,11 +69,19 @@ a rate-limit response (429) or a server error (5xx) is not asked again that day.
 
 # What we keep
 
-A small record per domain per day: the domain name, the time, the HTTP status, whether a
-PHP version number was visible in the headers, that version string, and which of a few
-categories it fell into (up to date with the published fix / older than the fix / no
-version visible / not measured). We also keep a log of every request we sent, so that if
-anyone asks what we did, we can answer with the record rather than a description.
+A record per domain per day: the domain name, the time, the HTTP status, the
+response headers your server sent (these can name the web server and other software it
+runs, and sometimes their versions), the address the name resolved to, any redirect, and
+which of a few categories the PHP reading fell into (up to date with the published fix /
+older than the fix / no version visible / not measured). We also keep a log of every
+request we sent, so that if anyone asks what we did, we can answer with the record rather
+than a description.
+
+We may also read those same stored headers to describe, in group totals only, which web
+server software the sites in each group run and whether it is still supported by its
+maker (for example an end-of-life version of PHP, Apache or nginx). This sends no new
+request to your site. Results are published only as counts of ten or more, never by site,
+and never by the name of a hosting company or software vendor.
 
 Everything stays on a university-controlled machine. We publish counts for groups of
 sites, and we hide any count smaller than ten. **We do not publish per-site results,

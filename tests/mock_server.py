@@ -157,6 +157,45 @@ _case("http_only_case", 200, [("X-Powered-By", "PHP/8.4.26")])               # o
 assert len(CASES) == 33, f"CASES table drifted: {len(CASES)}"
 
 
+# --------------------------------------------------------------------------- profiles
+# Header-only server profiles for products other than PHP (detector tests,
+# the proposed-event module). Kept apart from CASES on purpose: CASES is the PHP crawler's
+# contract and tests assert its size. Served at /profile/<name>. Distro builds carry
+# backported fixes under an old version number, so those profiles must never read as
+# "patched" or "exposed" from the number alone.
+PROFILES: dict[str, CaseSpec] = {}
+
+
+def _profile(name, headers):
+    PROFILES[name] = CaseSpec(name=name, status=200, headers=list(headers), body=_HTML_OK)
+    return name
+
+
+_profile("httpd_2_4_69", [("Server", "Apache/2.4.69")])
+_profile("httpd_2_4_62", [("Server", "Apache/2.4.62")])
+_profile("httpd_2_4_67", [("Server", "Apache/2.4.67")])
+_profile("httpd_2_2_34", [("Server", "Apache/2.2.34")])
+_profile("httpd_debian", [("Server", "Apache/2.4.62 (Debian)")])
+_profile("httpd_ubuntu", [("Server", "Apache/2.4.58 (Ubuntu)")])
+_profile("httpd_rhel", [("Server", "Apache/2.4.37 (Red Hat Enterprise Linux)")])
+_profile("httpd_hidden", [("Server", "Apache")])
+_profile("httpd_two_part", [("Server", "Apache/2.4")])
+_profile("nginx_1_31_7", [("Server", "nginx/1.31.7")])
+_profile("nginx_1_31_6", [("Server", "nginx/1.31.6")])
+_profile("nginx_1_30_6", [("Server", "nginx/1.30.6")])
+_profile("nginx_1_30_5", [("Server", "nginx/1.30.5")])
+_profile("nginx_1_28_3", [("Server", "nginx/1.28.3")])
+_profile("nginx_ubuntu", [("Server", "nginx/1.18.0 (Ubuntu)")])
+_profile("nginx_hidden", [("Server", "nginx")])
+_profile("nginx_future_branch", [("Server", "nginx/1.33.0")])
+_profile("openresty", [("Server", "openresty/1.21.4.1")])
+_profile("iis_10", [("Server", "Microsoft-IIS/10.0")])
+_profile("wordpress_generator", [("X-Generator", "WordPress 7.1.4")])
+_profile("wordpress_link_only", [("Link", '<https://example.test/wp-json/>; rel="https://api.w.org/"')])
+_profile("cloudflare_front", [("Server", "cloudflare"), ("Cf-Ray", "0000000000000000-ORD")])
+_profile("stacked_proxy", [("Server", "nginx"), ("Server", "Apache/2.4.62")])
+
+
 # --------------------------------------------------------------------------- cert
 def _cert_is_fresh() -> bool:
     if not (CERT_FILE.exists() and KEY_FILE.exists()):
@@ -281,6 +320,13 @@ class _CaseHandler(BaseHTTPRequestHandler):
                 self._respond(spec if want_body else _no_body(spec))
                 return
             self._write(404, [], b"no such case\n")
+            return
+        if path.startswith("/profile/"):
+            spec = PROFILES.get(path[len("/profile/"):])
+            if spec is not None:
+                self._respond(spec if want_body else _no_body(spec))
+                return
+            self._write(404, [], b"no such profile\n")
             return
         self._write(404, [], b"not found\n")
 

@@ -1,0 +1,27 @@
+{
+ "catalog_version": "2026.10.28",
+ "total": 1762,
+ "groups": [
+  {
+   "reason": "Client or local software: leaves no passive fingerprint in an ordinary web response",
+   "count": 1228,
+   "examples": [
+    "Microsoft Windows",
+    "Apple Multiple Products",
+    "Google Chromium V8",
+    "Microsoft Internet Explorer",
+    "Adobe Flash Player",
+    "Linux Kernel",
+    "Microsoft Office",
+    "Microsoft Win32k",
+    "Adobe Acrobat and Reader",
+    "Samsung Mobile Devices"
+   ]
+  }
+ ],
+ "still_open": {
+  "edge_or_server_product": 428,
+  "homepage_stack": 106
+ },
+ "caveat": "A first-pass keyword sort over vendor and product names. It over- and under-counts, and no second rater has checked it. Entries stay in the catalog with their reason; none are dropped."
+}

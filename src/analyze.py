@@ -36,6 +36,7 @@ import config
 import db
 import detect
 import hosting
+import support_status
 import versions
 
 # ------------------------------------------------------------------ analysis states (§5)
@@ -495,6 +496,9 @@ def build_report(conn: sqlite3.Connection, frame: Frame, event: versions.PatchEv
         L += _rq4(reg_readings, reg_frame, days, asn, sup)
         L += _sensitivity(reg_readings, reg_frame, days, asn, sup)
     L += _rq6(frame, readings, days, sup)
+    L += _unsupported(conn, frame, runs, sup)
+    L += _platforms(conn, frame, runs, sup)
+    L += _election(conn, frame, runs, sup)
     L += _historical(conn, frame, sup)
     return "\n".join(L) + "\n"
 
@@ -724,6 +728,159 @@ def _rq6(frame: Frame, readings: list[Reading], days: dict[str, float],
               f"{sup.count(res['comparison'][0])}.", ""]
         L += _table(["day", "WI denominator", "WI A(d)", "comparison denominator",
                      "comparison A(d)", "WI - comparison (pp)"], rows) + [""]
+    return L
+
+
+UNSUPPORTED_PRODUCTS = ("php", "apache", "nginx", "openssl")
+
+
+def _unsupported(conn, frame: Frame, runs: list[dict[str, Any]], sup: Suppressor) -> list[str]:
+    """EXPLORATORY, not pre-registered (see the exploratory notes): of the sites that
+    show a product version in their headers, the share on a branch its maker no longer
+    fixes, judged by the pinned endoflife.date table on each snapshot's own date. Counts
+    only. Distro-labelled builds are counted apart: their vendor may still patch them."""
+    import inventory                       # late: inventory imports this module
+
+    from_cfg = lambda r: (json.loads(r.get("config_json") or "{}") or {}).get("region")  # noqa: E731
+    regions = sorted({r.get("region") for r in frame.rows.values() if r.get("region")})
+    L: list[str] = []
+    for region in regions:
+        reg_frame = region_frame(frame, region)
+        types = {d: (row.get("stratum") or row.get("domain_type") or "Unknown")
+                 for d, row in reg_frame.rows.items()}
+        rows, latest = [], None
+        for r in runs:
+            try:
+                if from_cfg(r) != region:
+                    continue
+            except ValueError:
+                continue
+            inv = inventory.aggregate_conn(conn, r["run_id"], only_domains=reg_frame.rows, types=types)
+            if not inv.answering:
+                continue
+            latest = inv
+            for p in UNSUPPORTED_PRODUCTS:
+                c = inv.by_product.get(p)
+                if c and (c.placed or c.eol_distro):
+                    rows.append([inv.as_of, p, sup.count(c.disclosed), sup.count(c.placed),
+                                 sup.count(c.eol), sup.share(c.eol, c.placed),
+                                 sup.count(c.eol_distro)])
+        if not rows:
+            continue
+        info = support_status.snapshot_info()
+        L += [f"## Exploratory: unsupported software among version-showing sites - {region}", "",
+              "NOT pre-registered. `placed` = sites whose headers give a version we can place "
+              "on a branch, with no package-suffix ambiguity; `unsupported` = of those, on a "
+              "branch past its maker's end of life on the snapshot date. "
+              f"Support dates: endoflife.date, pinned {info['retrieved_on']}. IIS is not "
+              "tracked. Sites that show no version are outside this table; see the coverage "
+              "figure before reading a share.", ""]
+        L += _table(["snapshot (UTC date)", "product", "version shown", "placed",
+                     "unsupported", "share", "distro-labelled on EOL branch"], rows) + [""]
+        if latest is not None:
+            pub = latest.public(sup)["by_type"]
+            trows = []
+            for t, d in pub.items():
+                for p in UNSUPPORTED_PRODUCTS:
+                    cell = d.get(p)
+                    if cell and cell["unsupported_basis"] not in ("0",):
+                        trows.append([t, p, cell["unsupported_basis"], cell["unsupported"],
+                                      cell["unsupported_share"]])
+            if trows:
+                L += [f"Latest snapshot ({latest.as_of}) by entity type:", ""]
+                L += _table(["entity type", "product", "placed", "unsupported", "share"], trows) + [""]
+    return L
+
+
+ELECTION_DAY = "2026-11-03"
+ELECTION_STRATUM = "Election office"
+
+
+def _election(conn, frame: Frame, runs: list[dict[str, Any]], sup: Suppressor) -> list[str]:
+    """EXPLORATORY, not pre-registered: the Election office stratum around the
+    2026-11-03 midterm. A table is printed ONLY if every cell in it is large enough to show; if any
+    snapshot has a hidden cell the whole table is replaced by one line, because a partial table of a
+    small stratum is how a single office gets identified."""
+    import inventory                       # late: inventory imports this module
+
+    L: list[str] = []
+    for region in sorted({r.get("region") for r in frame.rows.values() if r.get("region")}):
+        reg_frame = region_frame(frame, region)
+        doms = {d for d, row in reg_frame.rows.items() if row.get("stratum") == ELECTION_STRATUM}
+        if not doms:
+            continue
+        rows, tiny = [], False
+        for r in runs:
+            try:
+                if (json.loads(r.get("config_json") or "{}") or {}).get("region") != region:
+                    continue
+            except ValueError:
+                continue
+            inv = inventory.aggregate_conn(conn, r["run_id"], only_domains=doms)
+            if not inv.answering:
+                continue
+            php = inv.by_product.get("php")
+            cells = [inv.answering, php.named if php else 0, php.placed if php else 0, php.eol if php else 0]
+            if sup.on and any(sup.hidden(c) for c in cells[:3]):
+                tiny = True
+            when = "before" if inv.as_of < ELECTION_DAY else "on or after"
+            rows.append([inv.as_of, when, *[str(c) for c in cells]])
+        if not rows:
+            continue
+        L += [f"## Exploratory: election-office domains around {ELECTION_DAY} - {region}", "",
+              "NOT pre-registered. The stratum is small, so the table is shown only when every count in it "
+              "can be shown; otherwise it is withheld whole.", ""]
+        if tiny:
+            L += ["Too few election-office domains with a placeable PHP version to report in this region; "
+                  "nothing is shown.", ""]
+        else:
+            L += _table(["snapshot (UTC date)", "relative to election day", "answering", "show PHP",
+                         "version placeable", "on an unsupported branch"], rows) + [""]
+    return L
+
+
+def _platforms(conn, frame: Frame, runs: list[dict[str, Any]], sup: Suppressor) -> list[str]:
+    """EXPLORATORY, not pre-registered: who is behind the homepage. Software
+    classes get generic labels; other server tokens are 'platform 1', 'platform 2' by size.
+    Vendors are never named (plan §8, decision D5). Latest snapshot per region."""
+    import platforms                       # late: platforms imports this module
+
+    L: list[str] = []
+    for region in sorted({r.get("region") for r in frame.rows.values() if r.get("region")}):
+        reg_frame = region_frame(frame, region)
+        latest = None
+        for r in runs:
+            try:
+                if (json.loads(r.get("config_json") or "{}") or {}).get("region") != region:
+                    continue
+            except ValueError:
+                continue
+            latest = r
+        if latest is None:
+            continue
+        t = platforms.aggregate_conn(conn, latest["run_id"], only_domains=reg_frame.rows)
+        if not t.answering:
+            continue
+        pub = platforms.public(t, sup)
+        L += [f"## Exploratory: platform and hosting concentration - {region}", "",
+              f"NOT pre-registered. Snapshot {pub['as_of']}; {pub['answering']} answering domains. Vendors "
+              "are never named: platforms are ranked by size. Hosting figures group sites by the "
+              "address they resolved to and keep only group sizes.", ""]
+        L += _table(["web server or edge, by class", "domains", "share"],
+                    [[c, v["n"], v["share"]] for c, v in pub["by_category"].items()]) + [""]
+        if pub["by_platform"]:
+            L += _table(["server platform (largest first)", "domains", "share"],
+                        [[p["platform"], p["n"], p["share"]] for p in pub["by_platform"]]) + [""]
+        h = pub["hosting"]
+        L += [f"- platform concentration (Herfindahl, 0 to 1): {pub['platform_hhi']}",
+              f"- domains sharing a resolved address with another domain: {h['domains_sharing_an_address']} "
+              f"({h['share_sharing_an_address']}); largest single address: {h['largest_address_share']}; "
+              f"address-level Herfindahl: {h['address_hhi']}", ""]
+        if pub["php_by_category"]:
+            L += ["PHP sites with a placeable version, by class (unsupported = branch PHP no longer fixes):", ""]
+            L += _table(["class", "placed", "unsupported", "share"],
+                        [[c, v["placed"], v["unsupported"], v["unsupported_share"]]
+                         for c, v in pub["php_by_category"].items()]) + [""]
     return L
 
 

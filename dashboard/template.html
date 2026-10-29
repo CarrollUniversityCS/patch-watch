@@ -158,6 +158,33 @@ section { display: flex; flex-direction: column; gap: 16px; }
 .axis-ticks span:first-child { transform: none; }
 .axis-ticks span:last-child { transform: translateX(-100%); }
 
+.bar.prelim .seg { opacity: 0.6; outline: 1px dashed var(--ink-3); outline-offset: -2px; }
+.prelim-tag { display: block; font-size: 11.5px; color: var(--ink-3); font-weight: 600; }
+.sw.prelim { background: transparent; border: 1px dashed var(--ink-3); }
+
+.tl { position: relative; height: 64px; margin: 4px 8px 0; }
+.tl-line { position: absolute; left: 0; right: 0; top: 30px; height: 2px; background: var(--rule); }
+.tl-dot { position: absolute; top: 25px; width: 12px; height: 12px; border-radius: 50%; transform: translateX(-50%); background: var(--accent); border: 2px solid var(--surface); box-sizing: content-box; }
+.tl-dot.kind-onset { background: var(--st-exposed); }
+.tl-dot.kind-due { background: var(--st-ambiguous); border-radius: 2px; }
+.tl-dot.kind-disclosure { background: var(--ink); }
+.tl-dot.kind-snapshot { width: 8px; height: 8px; top: 27px; background: var(--st-patched); }
+.tl-dot.kind-snapshot.prelim { background: var(--surface); border: 2px dashed var(--ink-3); width: 6px; height: 6px; top: 26px; }
+.tl-label { position: absolute; transform: translateX(-50%); font-size: 11.5px; color: var(--ink-2); white-space: nowrap; }
+.tl-label.up { top: 2px; }
+.tl-label.down { top: 46px; }
+ol.tl-list { margin: 8px 0 0; padding-left: 20px; font-size: 13px; color: var(--ink-2); }
+ol.tl-list li { margin: 2px 0; }
+.nm-list { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); }
+
+.unsup { display: flex; flex-direction: column; gap: 8px; }
+.u-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 150px; gap: 12px; align-items: center; }
+.u-track { height: 14px; border-radius: 4px; background: var(--accent-soft); overflow: hidden; }
+.u-fill { height: 100%; background: var(--st-eol); }
+.u-track.withheld { background-image: repeating-linear-gradient(45deg, var(--st-withheld) 0 2px, transparent 2px 5px); background-color: var(--st-hidden); }
+.u-end { font-size: 13px; color: var(--ink-2); }
+.u-end b { color: var(--ink); font-family: var(--font-data); font-weight: 500; }
+
 .hatch {
   background-image: repeating-linear-gradient(45deg, var(--st-withheld) 0 2px, transparent 2px 5px);
   background-color: var(--st-hidden);
@@ -181,8 +208,9 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
   h1 { font-size: 25px; }
   .tier { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .bar-row, .axis { grid-template-columns: 74px minmax(0, 1fr); }
-  .bar-end { grid-column: 2; margin-top: -2px; }
+  .bar-row, .axis, .u-row { grid-template-columns: 74px minmax(0, 1fr); }
+  .bar-end, .u-end { grid-column: 2; margin-top: -2px; }
+  .tl { display: none; }
   .axis > :last-child { display: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -341,10 +369,14 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
       el("b", { text: last.funnel.visible }), " show a version we can rank"
     ]));
 
+    var tl = timelineBlock(e);
+    if (tl) panel.appendChild(tl);
+
     var legend = el("div", { class: "legend", role: "list" });
     ORDER.forEach(function (s) {
       legend.appendChild(el("span", { role: "listitem", title: STATE[s].note }, [swatch(s), STATE[s].icon + " " + STATE[s].label]));
     });
+    legend.appendChild(el("span", { role: "listitem" }, [el("i", { class: "sw prelim", "aria-hidden": "true" }), "Preliminary (fewer than " + e.preliminary_before_days + " days since the fix)"]));
     if (D.suppressed) {
       var hs = el("i", { class: "sw hatch", "aria-hidden": "true" });
       legend.appendChild(el("span", { role: "listitem" }, [hs, "Withheld (cells under 10, pooled)"]));
@@ -359,7 +391,7 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
       ]));
       var bars = el("div", { class: "bars" });
       rg.points.forEach(function (p) {
-        var bar = el("div", { class: "bar", role: "img", "aria-label": barLabel(p) });
+        var bar = el("div", { class: "bar" + (p.preliminary ? " prelim" : ""), role: "img", "aria-label": barLabel(p, e) });
         if (p.P_n) {
           ORDER.forEach(function (s) {
             var n = p.shown[s];
@@ -386,7 +418,7 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
           bar.appendChild(none);
         }
         bars.appendChild(el("div", { class: "bar-row" }, [
-          el("div", { class: "bar-label", html: "<b>Day " + p.day.toFixed(1) + "</b> · " + fmtDate(p.started) + (p.after_federal_due ? "<span class=\"due\">past federal deadline</span>" : "") }),
+          el("div", { class: "bar-label", html: "<b>Day " + p.day.toFixed(1) + "</b> · " + fmtDate(p.started) + (p.after_federal_due ? "<span class=\"due\">past federal deadline</span>" : "") + (p.preliminary ? "<span class=\"prelim-tag\">preliminary</span>" : "") }),
           bar,
           el("div", { class: "bar-end", html: p.patched_share === "\u00a7" ? "Patched share withheld" : p.patched_share === "\u2013" ? "No ranked versions" : "<b>" + p.patched_share + "</b> patched of visible" })
         ]));
@@ -400,18 +432,127 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
       panel.appendChild(box);
     });
 
+    panel.appendChild(unsupportedBlock(e));
     panel.appendChild(el("p", { class: "caveat", text: "A hidden version does not mean a site is patched, and a distro build can carry the fix without changing its version string. Those sites stay in their own segments and are left out of the patched share. These are domain counts from each run report; the pre-registered entity-level analysis is in reports/analysis_*.md." }));
     panel.appendChild(tableView(e));
     app.appendChild(panel);
   });
 
+  // Unsupported software: of sites showing a PHP version we can place, the share on a branch
+  // PHP no longer fixes. A withheld share is drawn hatched, never as a value.
+  function unsupportedBlock(e) {
+    var box = el("div", { class: "unsup", role: "group", "aria-label": "Unsupported PHP over time" }, [
+      el("h3", { text: "Unsupported software" }),
+      el("p", { class: "fine", text: "Share of sites showing a PHP version we can place that run a branch PHP no longer fixes (8.1 or older), one bar per snapshot. Sites that hide the version are not in this share, so read it together with the coverage figures above." })
+    ]);
+    var rows = [];
+    e.regions.forEach(function (rg) {
+      rg.points.forEach(function (p) {
+        var u = p.unsupported;
+        if (!u) return;
+        rows.push({ region: rg, p: p, u: u });
+      });
+    });
+    if (!rows.length) return el("div");
+    var primary = e.regions[0];
+    rows.filter(function (r) { return r.region === primary; }).forEach(function (r) {
+      var shown = r.u.pct !== null;
+      var track = el("div", { class: "u-track" + (shown ? "" : " withheld"), role: "img",
+        "aria-label": "Day " + r.p.day.toFixed(1) + ": " + (shown ? r.u.share + " on an unsupported branch, " + r.u.n + " of " + r.u.of : "share withheld") });
+      if (shown) {
+        var fill = el("div", { class: "u-fill" });
+        fill.style.width = r.u.pct + "%";
+        track.appendChild(fill);
+      }
+      hook(track, shown ? r.u.n + " of " + r.u.of + " sites with a placeable PHP version are on an unsupported branch (" + r.u.share + ")." : "Withheld: a count under 10 would make the share recoverable.");
+      box.appendChild(el("div", { class: "u-row" }, [
+        el("div", { class: "bar-label", html: "<b>Day " + r.p.day.toFixed(1) + "</b> · " + fmtDate(r.p.started) }),
+        track,
+        el("div", { class: "u-end", html: shown ? "<b>" + r.u.share + "</b> (" + r.u.n + " of " + r.u.of + ")" : "Share withheld" })
+      ]));
+    });
+    var head = ["Region", "Snapshot", "Day", "Unsupported", "Placeable", "Share"];
+    var trs = rows.map(function (r) {
+      return [REGION[r.region.region] || r.region.region, r.p.label, r.p.day.toFixed(1), r.u.n, r.u.of, r.u.share];
+    });
+    var table = el("table", null, [
+      el("thead", null, [el("tr", null, head.map(function (h) { return el("th", { scope: "col", text: h }); }))]),
+      el("tbody", null, trs.map(function (t) { return el("tr", null, t.map(function (c) { return el("td", { text: String(c) }); })); }))
+    ]);
+    box.appendChild(el("details", { class: "table-view" }, [el("summary", { text: "Show the unsupported-software numbers as a table" }), el("div", { class: "tbl-wrap" }, [table])]));
+    return box;
+  }
+
+  // Exposure window: fix released, exploitation seen (or KEV listing as a floor), federal deadline,
+  // then each snapshot. The strip is decoration; the dated list under it is the text equivalent.
+  function timelineBlock(e) {
+    var items = e.timeline || [];
+    if (items.length < 2) return null;
+    var t = items.map(function (i) { return Date.parse(i.date + "T00:00:00Z"); });
+    var lo = Math.min.apply(null, t), hi = Math.max.apply(null, t), span = Math.max(hi - lo, 86400000);
+    var strip = el("div", { class: "tl", "aria-hidden": "true" }, [el("div", { class: "tl-line" })]);
+    var flip = 0;
+    items.forEach(function (i, k) {
+      var pct = Math.min(98, Math.max(2, 100 * (t[k] - lo) / span));
+      var dot = el("i", { class: "tl-dot kind-" + i.kind + (i.preliminary ? " prelim" : "") });
+      dot.style.left = pct + "%";
+      strip.appendChild(dot);
+      if (i.kind !== "snapshot") {
+        var lab = el("span", { class: "tl-label " + (flip++ % 2 ? "down" : "up"), text: i.label + " · " + fmtDate(i.date) });
+        lab.style.left = pct + "%";
+        if (pct < 14) lab.style.transform = "none";
+        else if (pct > 86) lab.style.transform = "translateX(-100%)";
+        strip.appendChild(lab);
+      }
+    });
+    var onset = e.onset;
+    var list = el("ol", { class: "tl-list" }, items.map(function (i) {
+      var txt = fmtDate(i.date) + " · " + i.label;
+      if (i.kind === "snapshot") txt += " (day " + i.day.toFixed(1) + (i.since_text ? ", " + i.since_text : "") + (i.preliminary ? ", preliminary" : "") + ")";
+      else if (i.note) txt += " — " + i.note;
+      return el("li", { text: txt });
+    }));
+    return el("div", { class: "tl-wrap", role: "group", "aria-label": "Exposure window for " + e.title }, [
+      el("h3", { text: "Exposure window" }),
+      el("p", { class: "fine", text: onset && onset.kind === "kev_listing" ? "Exploitation start is shown as the date CISA added the flaw to its KEV list. That is a floor: the first exploitation was probably earlier." : "Dates and where they come from are listed below." }),
+      strip,
+      el("details", { class: "table-view" }, [el("summary", { text: "Show the dates as a list" }), list])
+    ]);
+  }
+
+  // "Not remotely measurable": the aggregate result of the KEV census first pass.
+  function measurabilityBlock(m) {
+    if (!m) return null;
+    var sec = el("section", { "aria-labelledby": "nm-h" }, [
+      el("div", { class: "section-head" }, [
+        el("div", { class: "eyebrow", text: "Not remotely measurable" }),
+        el("h2", { id: "nm-h", text: "What the intake cannot see from outside" }),
+        el("p", { class: "muted", text: "Of " + m.total + " vulnerabilities on CISA's Known Exploited list (catalog " + m.catalog_version + "), these leave no trace in an ordinary web response, so a homepage observer cannot judge whether they are patched. They stay listed with their reason rather than being dropped." })
+      ])
+    ]);
+    m.groups.forEach(function (g) {
+      sec.appendChild(el("div", { class: "card" }, [
+        el("h3", { text: g.count + " entries" }),
+        el("p", { class: "why", text: g.reason }),
+        el("p", { class: "fine", text: "Examples of products (public KEV data):" }),
+        el("ul", { class: "nm-list" }, g.examples.map(function (x) { return el("li", { text: x }); }))
+      ]));
+    });
+    if (m.still_open) {
+      sec.appendChild(el("p", { class: "fine", text: m.still_open.homepage_stack + " entries run on products that can show a version on a homepage and " + m.still_open.edge_or_server_product + " are edge or server products whose visibility is not yet decided; neither group is counted as unmeasurable." }));
+    }
+    sec.appendChild(el("p", { class: "caveat", text: m.caveat }));
+    return sec;
+  }
+
   function tile(v, label, key) {
     return el("div", { class: "tile" + (key ? " key" : "") }, [el("div", { class: "v", text: v }), el("div", { class: "l", text: label })]);
   }
-  function barLabel(p) {
-    if (!p.P_n) return "Day " + p.day.toFixed(1) + ": withheld, fewer than 10 domains with PHP evidence.";
+  function barLabel(p, e) {
+    var pre = p.preliminary ? " Preliminary: fewer than " + e.preliminary_before_days + " days since the fix." : "";
+    if (!p.P_n) return "Day " + p.day.toFixed(1) + ": withheld, fewer than 10 domains with PHP evidence." + pre;
     return "Day " + p.day.toFixed(1) + ", " + p.P + " domains with PHP evidence: " +
-      ORDER.map(function (s) { return STATE[s].label + " " + p.cells[s]; }).join(", ") + ". Patched share of visible versions " + p.patched_share + ".";
+      ORDER.map(function (s) { return STATE[s].label + " " + p.cells[s]; }).join(", ") + ". Patched share of visible versions " + p.patched_share + "." + pre;
   }
   function hook(node, text) {
     node.addEventListener("mouseenter", function (ev) { showTip(ev, text); });
@@ -421,11 +562,11 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
     node.addEventListener("blur", hideTip);
   }
   function tableView(e) {
-    var head = ["Region", "Snapshot", "Day", "Domains", "Answered", "PHP"].concat(ORDER.map(function (s) { return STATE[s].label; }), ["Patched of visible"]);
+    var head = ["Region", "Snapshot", "Day", "Days since onset (negative = before)", "Preliminary", "Domains", "Answered", "PHP"].concat(ORDER.map(function (s) { return STATE[s].label; }), ["Patched of visible"]);
     var rows = [];
     e.regions.forEach(function (rg) {
       rg.points.forEach(function (p) {
-        rows.push([REGION[rg.region] || rg.region, p.label, p.day.toFixed(1), p.funnel.domains, p.funnel.reached, p.P]
+        rows.push([REGION[rg.region] || rg.region, p.label, p.day.toFixed(1), p.since_onset === null || p.since_onset === undefined ? "–" : p.since_onset.toFixed(1), p.preliminary ? "yes" : "no", p.funnel.domains, p.funnel.reached, p.P]
           .concat(ORDER.map(function (s) { return p.cells[s]; }), [p.patched_share]));
       });
     });
@@ -435,6 +576,9 @@ footer { font-size: 13px; color: var(--ink-3); display: flex; flex-direction: co
     ]);
     return el("details", { class: "table-view" }, [el("summary", { text: "Show the numbers as a table" }), el("div", { class: "tbl-wrap" }, [table])]);
   }
+
+  var nm = measurabilityBlock(D.measurability);
+  if (nm) app.appendChild(nm);
 
   app.appendChild(el("footer", null, [
     el("p", { text: "Passive only: one homepage GET per domain per snapshot, with a declared user agent and published rate limits. Tribal nations' sites are not measured. Per-domain results go only to the principal investigator." }),

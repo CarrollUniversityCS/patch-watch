@@ -13,6 +13,7 @@ on:
     paths:
       - "reports/**"
       - "dashboard/catalog.json"
+      - "dashboard/measurability.json"
       - "dashboard/template.html"
       - "src/**"
       - ".github/workflows/pages.yml"

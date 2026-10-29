@@ -234,3 +234,45 @@ def test_report_states_primary_endpoint_contingency_and_provenance(study):
     assert "Contingency rule applies" in text
     assert "Median not reported" in text or "RQ3" in text
     assert "provenance: code `" in text
+
+
+# ---------------------------------------------------------------- unsupported share (exploratory)
+def _with_regions(conn):
+    conn.execute("UPDATE runs SET config_json = '{\"region\": \"wisconsin\"}'")
+    conn.execute("UPDATE observations SET headers_json = ? WHERE domain = 'c.gov' AND run_id = 'S1'",
+                 (xpb("7.4.33"),))
+    conn.commit()
+    return [dict(r) for r in conn.execute("SELECT * FROM runs WHERE run_id IN ('S1','S2') ORDER BY started_at_utc")]
+
+
+def test_unsupported_section_counts_end_of_life_branches_unsuppressed(study):
+    conn, frame = study
+    runs = _with_regions(conn)
+    text = "\n".join(analyze._unsupported(conn, frame, runs, analyze.Suppressor(on=False)))
+    assert "Exploratory: unsupported software" in text and "NOT pre-registered" in text
+    # S1: PHP 8.3.36, 8.3.35, 8.2.34, 7.4.33 placed -> 1 end of life of 4
+    assert "| 2026-10-23 | php | 4 | 4 | 1 | 25% |" in text
+
+
+def test_unsupported_section_is_suppressed_by_default_and_names_nothing(study):
+    conn, frame = study
+    runs = _with_regions(conn)
+    text = "\n".join(analyze._unsupported(conn, frame, runs, analyze.Suppressor()))
+    assert "| 2026-10-23 | php | <10 | <10 | <10 | § |" in text
+    for d, r in frame.rows.items():
+        assert d not in text and r["organization"] not in text
+
+
+def test_unsupported_section_skips_runs_of_other_regions(study):
+    conn, frame = study
+    runs = _with_regions(conn)
+    for r in runs:
+        r["config_json"] = '{"region": "comparison"}'
+    assert analyze._unsupported(conn, frame, runs, analyze.Suppressor(on=False)) == []
+
+
+def test_unsupported_section_survives_unparseable_run_config(study):
+    conn, frame = study
+    runs = _with_regions(conn)
+    runs[0]["config_json"] = "{not json"
+    analyze._unsupported(conn, frame, runs, analyze.Suppressor(on=False))   # must not raise

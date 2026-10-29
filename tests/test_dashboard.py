@@ -181,3 +181,64 @@ def test_snapshots_flagged_against_federal_due():
 def test_no_kev_means_no_flag():
     _, p = model_for({"PATCHED_UPSTREAM": 20})
     assert p["after_federal_due"] is False
+
+
+# ---------------------------------------------------------------- unsupported-software panel
+def _states(patched=0, exposed=0, eol=0):
+    import analyze
+    s = {k: 0 for k in analyze.STATES}
+    s.update(PATCHED=patched, EXPOSED=exposed, EOL=eol)
+    return s
+
+
+def test_unsupported_share_of_placeable_versions():
+    u = dashboard.unsupported(_states(patched=32, eol=10), analyze_sup())
+    assert (u["n"], u["of"], u["share"], u["pct"]) == ("10", "42", "24%", 24)
+
+
+def test_unsupported_hides_a_small_numerator_and_never_gives_a_pct():
+    u = dashboard.unsupported(_states(patched=40, eol=5), analyze_sup())
+    assert u["n"] == "<10" and u["share"] == "§" and u["pct"] is None
+
+
+def test_unsupported_hides_when_the_complement_is_small():
+    u = dashboard.unsupported(_states(patched=5, eol=40), analyze_sup())
+    assert u["share"] == "§" and u["pct"] is None
+
+
+def test_unsupported_hides_when_too_few_sites_are_placeable():
+    u = dashboard.unsupported(_states(patched=3, eol=2), analyze_sup())
+    assert u["of"] == "<10" and u["pct"] is None
+
+
+def test_unsupported_with_no_versions_is_a_dash_not_a_number():
+    u = dashboard.unsupported(_states(), analyze_sup())
+    assert u["share"] == "–" and u["pct"] is None
+
+
+def test_unsupported_unsuppressed_shows_raw_counts():
+    u = dashboard.unsupported(_states(patched=3, eol=2), analyze_sup(False))
+    assert (u["n"], u["of"], u["pct"]) == ("2", "5", 40)
+
+
+def test_unsupported_excludes_ambiguous_and_hidden_versions():
+    import analyze
+    s = _states(patched=20, eol=10)
+    s["AMBIGUOUS"], s["OPAQUE"] = 50, 100
+    assert dashboard.unsupported(s, analyze.Suppressor())["of"] == "30"
+
+
+def test_model_points_carry_the_unsupported_block():
+    _, p = model_for({"PATCHED_UPSTREAM": 30, "EOL_UNFIXED": 12, "NO_PHP_EVIDENCE": 400})
+    assert p["unsupported"]["share"] == "29%" and p["unsupported"]["pct"] == 29
+
+
+def test_template_draws_a_withheld_share_hatched_not_as_a_value():
+    t = dashboard.TEMPLATE_PATH.read_text(encoding="utf-8")
+    assert "u.pct !== null" in t or "r.u.pct !== null" in t
+    assert "Share withheld" in t
+
+
+def analyze_sup(on=True):
+    import analyze
+    return analyze.Suppressor(on=on)

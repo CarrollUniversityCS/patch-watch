@@ -46,12 +46,16 @@ sites hide it, and distros can backport a fix without changing the version strin
 | `src/detect.py` | Version normalisation, change events between snapshots, flapping vs. real upgrades. |
 | `src/db.py` | SQLite schema and writes: `domains`, `runs`, `observations`, `request_ledger`, `patch_events`, `meta`. |
 | `src/dashboard.py` | The static dashboard: `dashboard/catalog.json` (every vulnerability triaged so far, by measurability tier) plus each live event's patch state, drawn from the committed run reports with the same suppression as `analyze.py`. Writes `dashboard/index.html` from `dashboard/template.html`. A view, not an outcome: domain counts, no network, no database. |
+| `src/inventory.py` | Header inventory: which products and versions the stored response headers reveal, and how many sites show a rankable version. Counts only, read-only. |
+| `src/support_status.py` | Is a release branch still supported on a given day? Reads the pinned `src/eol_snapshot.json` (endoflife.date, retrieved once). |
+| `src/platforms.py` | Exploratory platform and hosting concentration; vendors are never named. |
+| `src/intake.py` | Reads exploited-vulnerability feeds and PROPOSES how measurable each entry is. Never edits the catalog. |
 | `src/pipeline.py` | One snapshot end to end: preflight → fetch → classify → store → diff → audit → summary. |
 | `scripts/run_snapshot.py` | The wrapper a cron line calls. |
 | `scripts/cron.disabled` | The schedule, deliberately commented out (Stage 4 says install it disabled). |
-| `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 380 at 2026-10-23). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
+| `tests/` | Loopback and synthetic only, no network (count them with `pytest -q`; 380 at 2026-10-23, 840 or more on 2026-10-29). `tests/mock_server.py` is the fake web used by all of them; `tests/test_fetch_rules.py` walks hard rules 1-8 and Gate A one enforcement point at a time. |
 | `data/` | Frame, sample, database, ledger exports — gitignored. See `data/README.md`. |
-| `docs/` | `analysis_plan.md` (the pre-registration), `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out notice, to be published as the GitHub profile README that `PROJECT_URL` and the user agent point at), `IRB_INQUIRY_NOTE.md` and `IRB_DETERMINATION.md`, `HERMES_RUNBOOK.md` (the bounded operator runbook for the live schedule), and `RESEARCH_DIRECTIONS.md` (six candidate follow-on studies, a first-pass KEV triage and a priority order and the prior work behind them; not part of the pre-registration). |
+| `docs/` | `analysis_plan.md` (the pre-registration), `OPERATIONS.md` (how to run and stop it), `project_page.md` (public opt-out notice, to be published as the GitHub profile README that `PROJECT_URL` and the user agent point at), `IRB_INQUIRY_NOTE.md` and `IRB_DETERMINATION.md`, `HERMES_RUNBOOK.md` (the bounded operator runbook for the live schedule). |
 | `requirements.txt` | Exact dependency versions. httpx is pinned on purpose (no-cookie guarantee). |
 | `blocklist.txt` | Hard rule 5: domains removed from measurement on request. |
 

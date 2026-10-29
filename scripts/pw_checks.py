@@ -12,7 +12,7 @@ Every check writes its result to logs/hub/checks/<date>_<check>.json and rebuild
 logs/hub/index.html, a local status page for all scheduled jobs. logs/ is gitignored, so
 nothing here is ever published (hard rule 7).
 
-    .venv\\Scripts\\python.exe -X utf8 scripts\\pw_checks.py prerun|optout|started|postrun|lastchance|build
+    .venv\\Scripts\\python.exe -X utf8 scripts\\pw_checks.py prerun|optout|started|postrun|lastchance|oversight|build
 
 What a check may change, and nothing else:
   * optout: append a domain that logs/optouts.md records but the effective blocklist
@@ -25,6 +25,10 @@ What a check may change, and nothing else:
   * postrun: on a halt (kill switch, audit violation, ALERT file) disable the live task,
     because a kill-switch halt leaves no flag and tomorrow would otherwise run (section
     5.1). Only Jack re-enables it. Then run the section 5.4 backup.
+  * oversight: runbook section 8 as code (read-only). A FAIL on the request budget, on opt-outs
+    honoured or on tribal-nation exclusion disables the live task; every other FAIL is only
+    reported. Writes logs/oversight/<date>.md. Not installed as a task by install_checks.ps1;
+    see the maintainers' notes.
 No check commits, pushes, clears a flag or edits code.
 
 Exit codes: 0 = no failures, 2 = at least one check failed (a toast is shown).
@@ -57,6 +61,7 @@ OPTOUTS = LOGS / "optouts.md"
 BLOCKLIST_LOCAL = ROOT / "blocklist.local.txt"
 HUB = LOGS / "hub"
 CHECKS = HUB / "checks"
+OVERSIGHT = LOGS / "oversight"
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
 HERMES_JOBS = (Path(os.environ.get("LOCALAPPDATA", "")) / "hermes" / "profiles"
                / "patch-watch-agent" / "cron" / "jobs.json")
@@ -72,7 +77,7 @@ LIVE_TASK = "patch-watch live day"
 EXPECTED_ASN = "AS40379"
 MIN_FREE_GB = 2
 CHECK_NAMES = {"prerun": "08:30 pre-run", "optout": "08:45 opt-outs", "started": "09:45 did it start?",
-               "postrun": "11:30 post-run", "lastchance": "18:00 last chance"}
+               "postrun": "11:30 post-run", "lastchance": "18:00 last chance", "oversight": "11:45 oversight"}
 RANK = {"ok": 0, "info": 0, "warn": 1, "fail": 2}
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
@@ -433,8 +438,236 @@ def check_postrun(now: dt.datetime) -> list[Result]:
     return out
 
 
+# ---------------------------------------------------------------- oversight reviewer (runbook section 8)
+def _utc_window(day: dt.date) -> tuple[str, str]:
+    """[start, end) of a local (America/Chicago) day as UTC ISO strings, for comparing with the stored stamps."""
+    start = dt.datetime(day.year, day.month, day.day, tzinfo=CHI).astimezone(dt.timezone.utc)
+    end = start + dt.timedelta(days=1)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    return start.strftime(fmt), end.strftime(fmt)
+
+
+def _ro_db() -> sqlite3.Connection | None:
+    if not DB.exists():
+        return None
+    con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def _region_of(row: sqlite3.Row) -> str:
+    try:
+        return str(json.loads(row["config_json"] or "{}").get("region") or "unknown")
+    except ValueError:
+        return "unknown"
+
+
+def _pause_live_task(why: str) -> Result:
+    rc, txt = ps(f"Disable-ScheduledTask -TaskName '{LIVE_TASK}' -ErrorAction Stop | Out-Null")
+    return Result("Schedule paused (oversight)", "fail",
+                  f"live task DISABLED ({why}); only Jack re-enables it" if rc == 0 else
+                  f"could not disable the live task - pause it by hand: {txt[-200:]}")
+
+
+def egress_result() -> Result:
+    try:
+        with urllib.request.urlopen("https://ipinfo.io/org", timeout=25) as resp:
+            org = resp.read().decode("utf-8", "replace").strip()
+        return Result("Egress network", "ok" if EXPECTED_ASN in org else "warn", org)
+    except OSError as exc:
+        return Result("Egress network", "warn", f"could not reach ipinfo.io: {exc}")
+
+
+def check_oversight(now: dt.datetime) -> list[Result]:
+    """Runbook 8.1 (every snapshot day) and 8.2 (Mondays), as code. Read-only except for the pause below:
+    a FAIL on item 2 (request budget), 4 (opt-outs honoured) or 5 (tribal domains) disables the live task,
+    exactly like the opt-out check; every other FAIL is reported and toasted but never acts on the schedule."""
+    today = now.date()
+    lo, hi = _utc_window(today)
+    out: list[Result] = []
+    pause_for: list[str] = []
+    con = _ro_db()
+    runs: list[sqlite3.Row] = []
+    if con is not None:
+        runs = [r for r in con.execute(
+            "SELECT run_id, snapshot_label, started_at_utc, finished_at_utc, kill_switch, config_json FROM runs "
+            "WHERE started_at_utc >= ? AND started_at_utc < ? ORDER BY started_at_utc", (lo, hi)).fetchall()
+            if not is_mock(r)]
+    task = next((t for t in tasks() if t["name"] == LIVE_TASK), None)
+
+    # 1. each of today's runs has a clean report, or its halt was handled (the schedule paused)
+    if not runs:
+        out.append(Result("8.1-1 run reports", "info", "SKIP: no run today"))
+    else:
+        bad = []
+        for r in runs:
+            report = REPORTS / f"run_{r['run_id']}.md"
+            halted = bool(r["kill_switch"]) or (REPORTS / f"ALERT_{r['run_id']}.md").exists()
+            text = report.read_text(encoding="utf-8", errors="replace") if report.exists() else ""
+            if halted:
+                if not (task and task["state"] == "Disabled"):
+                    bad.append(f"{r['run_id']}: halted and the live task is not paused")
+            elif "No violations found" not in text:
+                bad.append(f"{r['run_id']}: report missing or audit not clean")
+        out.append(Result("8.1-1 run reports", "fail" if bad else "ok",
+                          "; ".join(bad) if bad else f"PASS: {len(runs)} run(s) clean or handled"))
+
+    # 2. request budget: no domain with more than 3 distinct run+phase pairs today
+    if con is None:
+        out.append(Result("8.1-2 request budget", "info", "SKIP: no database"))
+    else:
+        over = con.execute("SELECT COUNT(*) FROM (SELECT domain, COUNT(DISTINCT run_id || '/' || phase) n "
+                           "FROM request_ledger WHERE ts_utc >= ? AND ts_utc < ? GROUP BY domain HAVING n > 3)",
+                           (lo, hi)).fetchone()[0]
+        out.append(Result("8.1-2 request budget", "fail" if over else "ok",
+                          f"{over} domain(s) exceeded 3 run+phase pairs today" if over else "PASS: none over 3"))
+        if over:
+            pause_for.append("request budget exceeded")
+
+    # 3. each region at most once
+    per_region: dict[str, int] = {}
+    for r in runs:
+        per_region[_region_of(r)] = per_region.get(_region_of(r), 0) + 1
+    twice = sorted(k for k, v in per_region.items() if v > 1)
+    out.append(Result("8.1-3 one run per region", "fail" if twice else "ok",
+                      "ran more than once today: " + ", ".join(twice) if twice else
+                      "PASS: " + (", ".join(f"{k} x{v}" for k, v in sorted(per_region.items())) or "no runs")))
+
+    # 4. no observation for a blocklisted domain has a status code
+    if con is None or not runs:
+        out.append(Result("8.1-4 opt-outs honoured", "info", "SKIP: no run today"))
+    else:
+        blocked = load_blocklist()
+        ids = [r["run_id"] for r in runs]
+        marks = ",".join("?" * len(ids))
+        seen = {d for (d,) in con.execute(
+            f"SELECT domain FROM observations WHERE run_id IN ({marks}) AND status_code IS NOT NULL", ids)}
+        hit = sorted(seen & blocked)
+        out.append(Result("8.1-4 opt-outs honoured", "fail" if hit else "ok",
+                          f"{len(hit)} blocklisted domain(s) got a response today" if hit else
+                          "PASS: no blocklisted domain responded"))
+        if hit:
+            pause_for.append("a blocklisted domain responded")
+
+    # 5. no tribal-nation domain in today's observations
+    if con is None or not runs:
+        out.append(Result("8.1-5 tribal nations excluded", "info", "SKIP: no run today"))
+    else:
+        ids = [r["run_id"] for r in runs]
+        marks = ",".join("?" * len(ids))
+        n = con.execute(
+            f"SELECT COUNT(*) FROM observations o LEFT JOIN domains d ON d.domain = o.domain "
+            f"WHERE o.run_id IN ({marks}) AND (d.domain_type LIKE 'Tribal%' OR d.stratum LIKE 'Tribal%')", ids).fetchone()[0]
+        out.append(Result("8.1-5 tribal nations excluded", "fail" if n else "ok",
+                          f"{n} tribal-stratum observation(s) today" if n else "PASS: none"))
+        if n:
+            pause_for.append("a tribal-nation domain was observed")
+
+    # 6. today's backup exists, passes integrity, and reached the second location
+    backups = sorted(BACKUPS.glob("study_*.db"), key=lambda p: p.stat().st_mtime) if BACKUPS.exists() else []
+    fresh = [p for p in backups if dt.date.fromtimestamp(p.stat().st_mtime) == today]
+    if not fresh:
+        out.append(Result("8.1-6 backup", "fail", "no backups/study_*.db written today"))
+    else:
+        try:
+            b = sqlite3.connect(f"file:{fresh[-1]}?mode=ro", uri=True)
+            try:
+                integrity = b.execute("PRAGMA integrity_check").fetchone()[0]
+            finally:
+                b.close()
+        except sqlite3.Error as exc:
+            integrity = f"error: {exc}"
+        dest = os.environ.get("PATCHWATCH_BACKUP_DIR", "").strip()
+        if integrity != "ok":
+            out.append(Result("8.1-6 backup", "fail", f"{fresh[-1].name} integrity_check: {integrity}"))
+        elif not dest:
+            out.append(Result("8.1-6 backup", "warn", f"{fresh[-1].name} is intact; PATCHWATCH_BACKUP_DIR unset so "
+                                                      "there is no off-machine copy (known)"))
+        elif not (Path(dest) / "backups" / fresh[-1].name).exists():     # backup_now.py copies into <dest>\backups
+            out.append(Result("8.1-6 backup", "fail", f"{fresh[-1].name} did not reach {dest}"))
+        else:
+            out.append(Result("8.1-6 backup", "ok", f"PASS: {fresh[-1].name} intact and copied to the second location"))
+
+    # 7. only the Gate A line differs from the committed code
+    rc, st = run(["git", "status", "--porcelain"])
+    changed = [ln[3:].strip() for ln in st.splitlines() if ln and not ln.startswith("??")]
+    code = [p for p in changed if p.startswith(("src/", "scripts/", "tests/")) and p != "src/config.py"]
+    docs = [p for p in changed if p not in code and p != "src/config.py"]
+    if code:
+        out.append(Result("8.1-7 working tree", "fail", "code differs from the committed version: " + ", ".join(code[:6])))
+    elif docs:
+        out.append(Result("8.1-7 working tree", "warn", "only documents differ beyond the Gate A line: " + ", ".join(docs[:6])))
+    else:
+        out.append(Result("8.1-7 working tree", "ok", "PASS: only the Gate A line (or nothing) differs"))
+
+    # 8. tomorrow's schedule is in place unless paused
+    if task is None:
+        out.append(Result("8.1-8 tomorrow's task", "fail", f"'{LIVE_TASK}' is missing"))
+    elif task["state"] == "Disabled":
+        out.append(Result("8.1-8 tomorrow's task", "info", "SKIP: the schedule is paused"))
+    else:
+        out.append(Result("8.1-8 tomorrow's task", "ok", f"PASS: {task['state']}, next {task['next'] or '-'}"))
+
+    # 9. disk and egress
+    free = shutil.disk_usage(ROOT).free / 1e9
+    out.append(Result("8.1-9 disk", "ok" if free >= MIN_FREE_GB else "fail", f"{free:,.0f} GB free"))
+    out.append(egress_result())
+
+    if today.weekday() == 0:                                       # Monday: runbook 8.2
+        out += _oversight_weekly(now, con)
+    else:
+        out.append(Result("8.2 weekly items", "info", "SKIP: not a Monday"))
+    if con is not None:
+        con.close()
+
+    if pause_for:
+        out.append(_pause_live_task("; ".join(pause_for)))
+    _write_oversight(today, out)
+    return out
+
+
+def _oversight_weekly(now: dt.datetime, con: sqlite3.Connection | None) -> list[Result]:
+    out: list[Result] = []
+    today = now.date()
+    rc, txt = run([str(PY), "-X", "utf8", "src/analyze.py", "--label", f"weekly_{today.isoformat()}"], timeout=900)
+    prov = next((ln for ln in txt.splitlines() if "provenance" in ln.lower()), "")
+    bad = rc != 0 or "MODIFIED" in txt
+    out.append(Result("8.2-1 weekly analysis", "fail" if bad else "ok",
+                      (prov or txt[-200:])[:300] + ("  (do not commit the report; Jack decides)" if not bad else "")))
+    if con is None:
+        out.append(Result("8.2-2 database integrity", "info", "SKIP: no database"))
+        return out
+    integrity = con.execute("PRAGMA integrity_check").fetchone()[0]
+    out.append(Result("8.2-2 database integrity", "ok" if integrity == "ok" else "fail", integrity))
+    week = [today - dt.timedelta(days=i) for i in range(1, 8)]
+    planned = [d for d in week if d in live_day.SNAPSHOT_DAYS]
+    lo, _ = _utc_window(week[-1])
+    _, hi = _utc_window(week[0])
+    got = [r for r in con.execute("SELECT run_id, config_json, started_at_utc FROM runs WHERE started_at_utc >= ? "
+                                  "AND started_at_utc < ?", (lo, hi)).fetchall() if not is_mock(r)
+           and _region_of(r) == "wisconsin"]
+    out.append(Result("8.2-3 run count vs plan", "ok" if len(got) >= len(planned) else "warn",
+                      f"{len(got)} Wisconsin run(s) in the last 7 days; {len(planned)} plan day(s) fell in the window"))
+    codes = con.execute("SELECT status_code, COUNT(*) FROM request_ledger WHERE ts_utc >= ? AND ts_utc < ? "
+                        "AND (status_code IN (403, 429) OR status_code >= 500) GROUP BY status_code", (lo, hi)).fetchall()
+    out.append(Result("8.2-4 refusal trend", "info",
+                      ", ".join(f"{c}: {n}" for c, n in codes) if codes else "no 403, 429 or 5xx in the last 7 days"))
+    return out
+
+
+def _write_oversight(day: dt.date, results: list[Result]) -> None:
+    label = {"ok": "PASS", "info": "SKIP", "warn": "WARN", "fail": "FAIL"}
+    lines = [f"# Oversight review {day.isoformat()}", "",
+             "Runbook 8.1 (every snapshot day) and 8.2 (Mondays), run by `scripts/pw_checks.py oversight`.", ""]
+    lines += [f"- **{label[r.status]}** {r.name}: {r.detail}" for r in results]
+    lines.append("")
+    OVERSIGHT.mkdir(parents=True, exist_ok=True)
+    (OVERSIGHT / f"{day.isoformat()}.md").write_text("\n".join(lines), encoding="utf-8")
+
+
 CHECKS_FN = {"prerun": lambda n: check_prerun(n), "optout": lambda n: check_optout(n), "started": lambda n: check_started(n, False),
-             "postrun": lambda n: check_postrun(n), "lastchance": lambda n: check_started(n, True)}
+             "postrun": lambda n: check_postrun(n), "lastchance": lambda n: check_started(n, True),
+             "oversight": lambda n: check_oversight(n)}
 
 
 def run_check(name: str) -> int:

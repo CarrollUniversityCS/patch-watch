@@ -10,3 +10,8 @@ tests/fixtures/, gitignored), :8455 HTTP-only (no TLS), :8459 dead on purpose.
 Routes: GET /case/<name> and /robots.txt (`User-agent: CarrollPHPStudy`).
 Cases (name -> class under src/classify.py; full detail in mock_server.CASES):
 vuln8335 VULNERABLE | patched8336, patched_exact8512, patched_newbranch, same_domain_final PATCHED | hidden_cookie, hidden_bare_xpb, multi_set_cookie, body_hint(+php_hints) HIDDEN | ubuntu_suffix, debian_suffix, sury_suffix, rhel_comment POSSIBLY_BACKPORTED | eol81, eol74 EOL_UNFIXED | garbage_word, garbage_major_only UNPARSEABLE | no_php, iis_nophp, no_content, status_503/403, redirects NO_PHP_EVIDENCE | status_429, slow_short, slow_35s, big_body, https_bad_cert, http_only_case, crossdomain_redirect transport/status shapes | conflict_headers, two_xpb_values header conflicts. slow_35s is pinned in test_classify.py only — never fetched in the suite.
+
+Non-PHP profiles (detector tests): `mock_server.PROFILES` (separate from `CASES`, which
+tests assert the size of) are header-only responses for Apache httpd, nginx, IIS and WordPress,
+including distribution builds that carry backported fixes under an old number. Served at
+`/profile/<name>`.

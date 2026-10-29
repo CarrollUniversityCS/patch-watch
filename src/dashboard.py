@@ -61,6 +61,7 @@ def load_catalog(path: Path = CATALOG_PATH) -> list[dict[str, Any]]:
     entries = json.loads(Path(path).read_text(encoding="utf-8"))["entries"]
     seen: set[str] = set()
     for e in entries:
+        validate_entry(e)
         k = e["key"]
         if k in seen:
             raise ValueError(f"catalog: duplicate key {k!r}")
@@ -85,6 +86,48 @@ def load_catalog(path: Path = CATALOG_PATH) -> list[dict[str, Any]]:
 
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DISCLOSED = re.compile(r"^(\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?)?$")
+_CVE = re.compile(r"^CVE-\d{4}-\d{4,}$")
+
+# Decision D1 (maintainer decision): a chart point is "preliminary" until its snapshot is this many
+# days after disclosure, matching the pre-registered primary endpoint (plan §7.0). A dashboard
+# presentation rule only: it lives here, not in config.py, and changes no collection.
+PRELIMINARY_BEFORE_DAYS = 14
+
+REQUIRED_FIELDS: dict[str, type] = {
+    "key": str, "title": str, "cve_ids": list, "component": str, "disclosed": str,
+    "tier": str, "signal": str, "why": str, "sources": list,
+}
+EXPLOITATION_KINDS = ("vendor_reported", "kev_listing")
+
+
+def validate_entry(e: dict[str, Any]) -> None:
+    """Shape of one catalog entry (documented in dashboard/README.md). A malformed entry stops
+    the build instead of publishing a half-filled card."""
+    k = e.get("key", "<no key>")
+    for f, typ in REQUIRED_FIELDS.items():
+        if f not in e:
+            raise ValueError(f"catalog: {k!r} lacks required field {f!r}")
+        if not isinstance(e[f], typ):
+            raise ValueError(f"catalog: {k!r} field {f!r} must be {typ.__name__}")
+    if not e["key"] or not re.fullmatch(r"[a-z0-9_]+", e["key"]):
+        raise ValueError(f"catalog: key {e['key']!r} must be lower-case letters, digits and underscores")
+    if not all(isinstance(c, str) and _CVE.match(c) for c in e["cve_ids"]):
+        raise ValueError(f"catalog: {k!r} cve_ids must look like CVE-YYYY-NNNN")
+    if not _DISCLOSED.match(e["disclosed"]):
+        raise ValueError(f"catalog: {k!r} disclosed must be empty, YYYY-MM or YYYY-MM-DD")
+    if not all(isinstance(s, str) for s in e["sources"]):
+        raise ValueError(f"catalog: {k!r} sources must be a list of strings")
+    x = e.get("exploitation")
+    if x is not None:
+        if not _DATE.match(str(x.get("first_seen", ""))):
+            raise ValueError(f"catalog: {k!r} exploitation.first_seen must be YYYY-MM-DD")
+        if x.get("kind") not in EXPLOITATION_KINDS:
+            raise ValueError(f"catalog: {k!r} exploitation.kind must be one of {EXPLOITATION_KINDS}")
+        if not str(x.get("source", "")).strip():
+            raise ValueError(f"catalog: {k!r} exploitation.source must say where the date comes from")
+
+
 _LABEL = re.compile(r"^- snapshot label: `([^`]*)`(.*)$")
 _STARTED = re.compile(r"^- started / finished \(UTC\): (\S+)")
 _SAMPLE = re.compile(r"^- domains in sample: (\d+)")
@@ -161,11 +204,104 @@ def point(run: dict[str, Any], event: versions.PatchEvent, sup: analyze.Suppress
         },
         "patched_share": sup.share(states["PATCHED"], visible),
         "exposed": sup.count(states["EXPOSED"] + states["EOL"]),
+        "unsupported": unsupported(states, sup),
     }
 
 
+def unsupported(states: dict[str, int], sup: analyze.Suppressor) -> dict[str, Any]:
+    """Of the sites showing a PHP version we can place (no distro-build ambiguity), how
+    many run a branch PHP no longer fixes. Same suppression as every other cell; `pct` is
+    None whenever the share is withheld, so the page can never draw a hidden value."""
+    placed = states["PATCHED"] + states["EXPOSED"] + states["EOL"]
+    share = sup.share(states["EOL"], placed)
+    return {
+        "n": sup.count(states["EOL"]),
+        "of": sup.count(placed),
+        "share": share,
+        "pct": int(share[:-1]) if share.endswith("%") else None,
+    }
+
+
+def onset(e: dict[str, Any]) -> dict[str, str] | None:
+    """When exploitation started, with where the date comes from. A catalog `exploitation`
+    block wins. Without one the KEV listing date is used and labelled as a floor: CISA lists a
+    flaw after exploitation is seen, so it is not the first exploitation."""
+    x = e.get("exploitation")
+    if x:
+        return {"date": x["first_seen"], "kind": x["kind"], "source": x["source"].strip()}
+    kev = e.get("kev")
+    if kev:
+        return {"date": kev["added"], "kind": "kev_listing",
+                "source": "CISA KEV dateAdded: a floor, not the first exploitation"}
+    return None
+
+
+def days_between(date_or_ts: str, ts: str) -> float | None:
+    """Days from a date (YYYY-MM-DD or timestamp) to a snapshot timestamp, one decimal."""
+    a = analyze._parse_ts(date_or_ts if "T" in date_or_ts else date_or_ts + "T00:00:00Z")
+    b = analyze._parse_ts(ts)
+    if a is None or b is None:
+        return None
+    return round((b - a).total_seconds() / 86400, 1)
+
+
+def since_text(days: float | None, on: dict[str, str] | None) -> str:
+    """'0.9 days after CISA's KEV listing': direction and anchor stated, never a bare number."""
+    if days is None or not on:
+        return ""
+    what = "CISA's KEV listing" if on["kind"] == "kev_listing" else "exploitation was first seen"
+    return f"{abs(days):.1f} days {'after' if days >= 0 else 'before'} {what}"
+
+
+def timeline(e: dict[str, Any]) -> list[dict[str, Any]]:
+    """The exposure window as an ordered list of dated events: disclosure, exploitation onset
+    (with its source), the federal due date, and each Wisconsin-first snapshot. The page draws
+    it as a strip and as a plain list; both read from this one list."""
+    items: list[dict[str, Any]] = []
+    if e.get("t0_utc"):
+        items.append({"kind": "disclosure", "date": e["t0_utc"][:10], "label": "Fix released",
+                      "note": e.get("disclosed", "")})
+    on = e.get("onset")
+    if on:
+        label = ("Exploitation seen" if on["kind"] == "vendor_reported" else "Added to CISA's KEV list")
+        items.append({"kind": "onset", "date": on["date"], "label": label, "note": on["source"]})
+    due = (e.get("kev") or {}).get("federal_due")
+    if due:
+        items.append({"kind": "due", "date": due, "label": "Federal deadline",
+                      "note": "binds federal civilian agencies, not state or local governments"})
+    for rg in e.get("regions", []):
+        if rg["points"]:
+            for p in rg["points"]:
+                items.append({"kind": "snapshot", "date": p["started"][:10], "region": rg["region"],
+                              "label": "Snapshot", "day": p["day"], "preliminary": p["preliminary"],
+                              "since_onset": p["since_onset"],
+                              "since_text": since_text(p["since_onset"], on)})
+            break                       # the primary region draws the strip
+    order = {"disclosure": 0, "onset": 1, "due": 2, "snapshot": 3}
+    return sorted(items, key=lambda i: (i["date"], order[i["kind"]]))
+
+
+MEASURABILITY_PATH = DASHBOARD_DIR / "measurability.json"
+
+
+def load_measurability(path: Path = MEASURABILITY_PATH) -> dict[str, Any] | None:
+    """Optional aggregate summary of the KEV census (public KEV data, no domains): written by
+    scripts/kev_census.py. Checked here so a bad file stops the build."""
+    p = Path(path)
+    if not p.exists():
+        return None
+    m = json.loads(p.read_text(encoding="utf-8"))
+    for f in ("catalog_version", "total", "groups", "caveat"):
+        if f not in m:
+            raise ValueError(f"measurability: lacks {f!r}")
+    if not isinstance(m["groups"], list) or not all(
+            {"reason", "count", "examples"} <= set(g) and len(g["examples"]) <= 10 for g in m["groups"]):
+        raise ValueError("measurability: each group needs reason, count and at most 10 examples")
+    return m
+
+
 def build_model(entries: list[dict[str, Any]], runs: list[dict[str, Any]], *,
-                suppressed: bool = True) -> dict[str, Any]:
+                suppressed: bool = True, measurability: dict[str, Any] | None = None) -> dict[str, Any]:
     sup = analyze.Suppressor(on=suppressed)
     pipeline_event = versions.get_event(None)
     out_entries = []
@@ -181,9 +317,15 @@ def build_model(entries: list[dict[str, Any]], runs: list[dict[str, Any]], *,
             e["t0_utc"] = pipeline_event.t0_utc
             # A snapshot taken on or after the federal KEV due date (UTC calendar day).
             due = (e.get("kev") or {}).get("federal_due")
+            on = onset(e)
+            e["onset"] = on
+            e["preliminary_before_days"] = PRELIMINARY_BEFORE_DAYS
             for rg in e["regions"]:
                 for p in rg["points"]:
                     p["after_federal_due"] = bool(due) and p["started"][:10] >= due
+                    p["preliminary"] = p["day"] < PRELIMINARY_BEFORE_DAYS
+                    p["since_onset"] = days_between(on["date"], p["started"]) if on else None
+            e["timeline"] = timeline(e)
         out_entries.append(e)
     commit, dirty = _commit()
     return {
@@ -193,6 +335,7 @@ def build_model(entries: list[dict[str, Any]], runs: list[dict[str, Any]], *,
         "suppressed": suppressed,
         "tiers": [{"key": k, "label": lab, "blurb": b} for k, lab, b in TIERS],
         "entries": out_entries,
+        "measurability": measurability,
     }
 
 
@@ -230,7 +373,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     out = args.out or (config.DATA_DIR / "dashboard_UNSUPPRESSED.html" if args.unsuppressed
                        else DASHBOARD_DIR / "index.html")
-    model = build_model(load_catalog(), load_runs(), suppressed=not args.unsuppressed)
+    model = build_model(load_catalog(), load_runs(), suppressed=not args.unsuppressed,
+                        measurability=load_measurability())
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(model, TEMPLATE_PATH.read_text(encoding="utf-8"), args.fragment),
                    encoding="utf-8")
