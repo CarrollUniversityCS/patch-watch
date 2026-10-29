@@ -1,0 +1,56 @@
+# Publish the dashboard to GitHub Pages: https://carrolluniversitycs.github.io/patch-watch/
+#
+# Rebuilds dashboard/index.html from the committed run reports and catalog whenever they
+# change on main (Hermes commits reports/run_*.md after each snapshot day), so the public
+# page updates the same day. src/dashboard.py uses the standard library only, reads no
+# database and touches no network: the page shows exactly the suppressed totals already in
+# reports/. One-time setup: Settings -> Pages -> Source: GitHub Actions.
+name: Dashboard to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "reports/**"
+      - "dashboard/catalog.json"
+      - "dashboard/template.html"
+      - "src/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build the dashboard (suppressed counts only)
+        run: |
+          mkdir -p _site
+          python -X utf8 src/dashboard.py --out _site/index.html
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
