@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carroll CS Research</title>
+<meta name="description" content="Research projects from the Department of Computer Science at Carroll University, Waukesha, Wisconsin.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column; header, then one row per project, then a short footer. */
+:root {
+  --bg: #f6f6f4;
+  --surface: #ffffff;
+  --ink: #1a1d21;
+  --ink-2: #4b5159;
+  --ink-3: #737a83;
+  --rule: #dfe1e3;
+  --accent: #b4501a;          /* warm orange, used sparingly */
+  --accent-soft: #f7e9df;
+  --live: #0c7a2e;
+  --live-soft: #e2f3e7;
+  --font-display: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161a; --surface: #1c1f24; --ink: #eef0f2; --ink-2: #b9bfc6; --ink-3: #8b939c;
+    --rule: #2e333a; --accent: #f08a4b; --accent-soft: #33241b; --live: #5bd37f; --live-soft: #1b2e22;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161a; --surface: #1c1f24; --ink: #eef0f2; --ink-2: #b9bfc6; --ink-3: #8b939c;
+  --rule: #2e333a; --accent: #f08a4b; --accent-soft: #33241b; --live: #5bd37f; --live-soft: #1b2e22;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font-body); }
+.wrap {
+  max-width: 880px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 56px 64px;
+  display: flex; flex-direction: column; gap: 48px;
+}
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 40px; line-height: 1.1; font-weight: 700; letter-spacing: -0.015em; }
+h2 { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+h3 { font-size: 21px; font-weight: 650; }
+p { margin: 0; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 14px; }
+.lede { font-size: 18px; color: var(--ink-2); max-width: 60ch; }
+
+section { display: flex; flex-direction: column; gap: 16px; }
+.projects { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--rule); }
+.project { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; padding-block: 24px; border-bottom: 1px solid var(--rule); }
+.project-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.chip { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; }
+.chip.live { background: var(--live-soft); color: var(--live); }
+.chip.live::before { content: "\25CF  "; font-size: 9px; vertical-align: 1px; }
+.summary { color: var(--ink-2); max-width: 62ch; }
+.meta { font-family: var(--font-data); font-size: 12.5px; color: var(--ink-3); }
+.links { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; font-size: 15px; font-weight: 600; }
+.links a { text-decoration: none; white-space: nowrap; }
+.links a:hover { text-decoration: underline; }
+.links a.primary { background: var(--accent); color: var(--surface); padding: 6px 14px; border-radius: 6px; }
+.links a.primary:hover { text-decoration: none; filter: brightness(1.08); }
+
+.note { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 18px; color: var(--ink-2); font-size: 15px; max-width: 70ch; }
+.note strong { color: var(--ink); }
+footer { font-size: 14px; color: var(--ink-3); display: flex; flex-direction: column; gap: 6px; max-width: 70ch; }
+
+@media (max-width: 640px) {
+  .wrap { padding-block: 36px 48px; gap: 36px; }
+  h1 { font-size: 32px; }
+  .project { grid-template-columns: minmax(0, 1fr); }
+  .links { flex-direction: row; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Carroll University · Department of Computer Science</div>
+    <h1>Research projects</h1>
+    <p class="lede">Faculty and student research from Carroll's computer science program in Waukesha, Wisconsin. Each project links to its live results, its code, and the notice that explains how it collects data.</p>
+  </header>
+
+  <section aria-labelledby="projects-h">
+    <h2 id="projects-h">Projects</h2>
+    <ul class="projects">
+      <li class="project">
+        <div class="project-main">
+          <div class="title-row">
+            <h3>Patch Watch</h3>
+            <span class="chip live">Collecting</span>
+          </div>
+          <p class="summary">How quickly Wisconsin's nonfederal .gov websites patch critical vulnerabilities, starting with PHP2Shell (CVE-2026-109618 and CVE-2026-109619). Passive measurement: one ordinary homepage request per site per snapshot, aggregate results only, and an opt-out for any site.</p>
+          <p class="meta">Security measurement · started October 2026 · Jack Forden</p>
+        </div>
+        <div class="links">
+          <a class="primary" href="https://carrolluniversitycs.github.io/patch-watch/">Dashboard</a>
+          <a href="https://github.com/CarrollUniversityCS/patch-watch">Code</a>
+          <a href="https://github.com/JForden/JForden">Notice and opt-out</a>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <p class="note"><strong>Adding a project.</strong> Carroll CS faculty and students can list a project here: put it in a public repository under the CarrollUniversityCS organization, turn on GitHub Pages for it, and open a pull request on this site's repository adding one entry to the list above.</p>
+
+  <footer>
+    <p>Project pages are research outputs of individual faculty and students, not official statements of Carroll University.</p>
+    <p>Maintained by Jack Forden, Department of Computer Science · <span>jforden@carrollu.edu</span></p>
+  </footer>
+</div>
+</body>
+</html>
