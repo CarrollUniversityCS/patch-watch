@@ -10,149 +10,115 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a dark hero with the headline numbers, then one story per section:
-   patch state (the live event), unsupported software, the intake ladder, what cannot be measured. */
+/* Layout: a plain masthead with the headline figures, then one section per question:
+   patch state (the live event), unsupported software, the intake ladder, what cannot be measured.
+   Flat surfaces, thin rules, one accent colour; status colours are reserved for status. */
 :root {
-  --bg: #f3f5f8;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f8f9fb;
-  --ink: #0e1a28;
-  --ink-2: #44505e;
-  --ink-3: #66727f;
-  --rule: #dfe4ea;
-  --accent: #1456d8;
-  --accent-soft: #e6eefc;
-  --hero-1: #07111f;
-  --hero-2: #0d2742;
-  --hero-ink: #f4f7fb;
-  --hero-ink-2: #aebcce;
-  --alert: #ff7a45;
-  --st-patched: #12a150;
-  --st-exposed: #d62f3f;
-  --st-eol: #ee7b30;
-  --st-ambiguous: #f5b50e;
-  --st-hidden: #b8c0ca;
-  --st-withheld: #8a939d;
-  --shadow: 0 1px 2px rgba(14, 26, 40, .06), 0 8px 24px rgba(14, 26, 40, .06);
-  --font-display: "Bricolage Grotesque", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --wash: #f4f5f7;
+  --ink: #1b1b1b;
+  --ink-2: #454a50;
+  --ink-3: #5c6168;
+  --rule: #d4d7db;
+  --rule-strong: #1b1b1b;
+  --accent: #1a4480;
+  --accent-soft: #e7eef8;
+  --alert: #b3470f;
+  --st-patched: #1f7a3d;
+  --st-exposed: #b50d2c;
+  --st-eol: #d9682b;
+  --st-ambiguous: #e0a400;
+  --st-hidden: #b4bac1;
+  --st-withheld: #7d8590;
+  --font-display: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-data: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0a121b; --surface: #111c28; --surface-2: #0e1822; --ink: #eef3f8; --ink-2: #b9c6d3; --ink-3: #8d9bab;
-    --rule: #223142; --accent: #7fb0ff; --accent-soft: #162a46;
-    --st-patched: #2bc46b; --st-exposed: #f0586a; --st-eol: #f59a55; --st-hidden: #45525f; --st-withheld: #77828e;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+    --bg: #14181d; --surface: #14181d; --wash: #1b2128; --ink: #eceff2; --ink-2: #bcc4cc; --ink-3: #98a2ad;
+    --rule: #333c46; --rule-strong: #eceff2; --accent: #8db6ee; --accent-soft: #1c2a3d; --alert: #f09a68;
+    --st-patched: #3fb467; --st-exposed: #f0586a; --st-eol: #f59a55; --st-hidden: #4a5560; --st-withheld: #77828e;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0a121b; --surface: #111c28; --surface-2: #0e1822; --ink: #eef3f8; --ink-2: #b9c6d3; --ink-3: #8d9bab;
-  --rule: #223142; --accent: #7fb0ff; --accent-soft: #162a46;
-  --st-patched: #2bc46b; --st-exposed: #f0586a; --st-eol: #f59a55; --st-hidden: #45525f; --st-withheld: #77828e;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+  --bg: #14181d; --surface: #14181d; --wash: #1b2128; --ink: #eceff2; --ink-2: #bcc4cc; --ink-3: #98a2ad;
+  --rule: #333c46; --rule-strong: #eceff2; --accent: #8db6ee; --accent-soft: #1c2a3d; --alert: #f09a68;
+  --st-patched: #3fb467; --st-exposed: #f0586a; --st-eol: #f59a55; --st-hidden: #4a5560; --st-withheld: #77828e;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font-body); -webkit-font-smoothing: antialiased; }
-h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
-h2 { font-size: clamp(26px, 3.4vw, 36px); line-height: 1.1; font-weight: 800; }
-h3 { font-size: 17px; font-weight: 700; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 var(--font-body); }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 600; text-wrap: balance; }
+h1 { font-size: clamp(34px, 5vw, 48px); line-height: 1.1; }
+h2 { font-size: clamp(24px, 3vw, 30px); line-height: 1.2; }
+h3 { font-size: 19px; line-height: 1.3; }
 p { margin: 0; }
 .mono { font-family: var(--font-data); font-size: 12.5px; }
-.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
 .muted { color: var(--ink-2); }
-.fine { color: var(--ink-3); font-size: 13.5px; }
-a { color: var(--accent); }
-a:focus-visible, summary:focus-visible, .seg:focus-visible, button:focus-visible, .nav a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-.inner { max-width: 1120px; margin: 0 auto; padding-inline: max(20px, env(safe-area-inset-left, 0px)) max(20px, env(safe-area-inset-right, 0px)); }
+.fine { color: var(--ink-3); font-size: 14px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible, .seg:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.inner { max-width: 1040px; margin: 0 auto; padding-inline: max(20px, env(safe-area-inset-left, 0px)) max(20px, env(safe-area-inset-right, 0px)); }
 
-/* ---------- hero ---------- */
-.hero {
-  position: relative; overflow: hidden; color: var(--hero-ink);
-  background: radial-gradient(1200px 500px at 85% -10%, #1d4f8f 0%, transparent 60%), linear-gradient(160deg, var(--hero-1), var(--hero-2));
-  padding-block: 28px 0;
-}
-.hero::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
-  background-image: radial-gradient(rgba(255,255,255,.14) 1px, transparent 1px); background-size: 22px 22px;
-  mask-image: linear-gradient(180deg, #000 0%, transparent 85%); -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 85%);
-}
-.hero .inner { position: relative; }
-.hero-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.hero .eyebrow { color: var(--hero-ink-2); }
-.hero .eyebrow a.hub { color: inherit; text-decoration: none; }
-.hero .eyebrow a.hub:hover { text-decoration: underline; }
-.live-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--hero-ink); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); border-radius: 999px; padding: 5px 12px; }
-.live-pill i { width: 8px; height: 8px; border-radius: 50%; background: #3be07f; box-shadow: 0 0 0 0 rgba(59,224,127,.6); }
-@media (prefers-reduced-motion: no-preference) { .live-pill i { animation: pulse 2.2s infinite; } }
-@keyframes pulse { 70% { box-shadow: 0 0 0 9px rgba(59,224,127,0); } 100% { box-shadow: 0 0 0 0 rgba(59,224,127,0); } }
-.hero h1 { font-size: clamp(44px, 8vw, 88px); line-height: .95; font-weight: 800; letter-spacing: -0.035em; margin: 34px 0 18px; }
-.hero h1 em { font-style: normal; background: linear-gradient(90deg, #6fd3ff, #7bffb2); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.lede { max-width: 58ch; font-size: clamp(17px, 2vw, 21px); line-height: 1.5; color: var(--hero-ink-2); }
-.lede strong { color: var(--hero-ink); font-weight: 600; }
-.alert {
-  display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 22px; padding: 9px 14px; border-radius: 10px;
-  background: rgba(255,122,69,.12); border: 1px solid rgba(255,122,69,.45); color: #ffd9c9; font-size: 14px;
-}
-.alert b { color: #fff; }
-.alert .tag { background: var(--alert); color: #1a0c04; font-weight: 800; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; border-radius: 5px; padding: 2px 7px; }
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 40px; }
-.stat { background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 16px; padding: 18px 20px 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 2px; border-top: 4px solid var(--rule); }
-.stat.s-good { border-top-color: var(--st-patched); }
-.stat.s-warn { border-top-color: var(--st-eol); }
-.stat.s-hide { border-top-color: var(--st-hidden); }
-.stat.s-base { border-top-color: var(--accent); }
-.stat .v { font-family: var(--font-display); font-size: clamp(36px, 5vw, 54px); font-weight: 800; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.stat .l { font-size: 14px; font-weight: 600; margin-top: 6px; }
-.stat .d { font-size: 13px; color: var(--ink-3); line-height: 1.4; }
-.hero-meta { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12.5px; color: var(--hero-ink-2); padding-block: 22px 28px; }
-.hero-meta + .spacer { height: 0; }
+/* masthead */
+.masthead { background: var(--wash); border-bottom: 1px solid var(--rule); padding-block: 22px 30px; }
+.org { font-size: 14px; color: var(--ink-2); }
+.org a { color: inherit; }
+.masthead h1 { margin: 22px 0 12px; }
+.lede { max-width: 62ch; font-size: 19px; line-height: 1.5; color: var(--ink-2); }
+.notice { margin-top: 18px; max-width: 70ch; border-left: 4px solid var(--alert); padding: 2px 0 2px 14px; font-size: 16px; }
+.notice strong { color: var(--alert); }
+.figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 28px 0 0; border-top: 2px solid var(--rule-strong); }
+.fig { padding: 14px 18px 4px 0; margin-right: 18px; border-right: 1px solid var(--rule); }
+.fig:last-child { border-right: 0; margin-right: 0; }
+.fig .v { font-family: var(--font-display); font-size: clamp(34px, 4.4vw, 46px); font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.fig .l { font-size: 15px; font-weight: 600; margin-top: 4px; }
+.fig .d { font-size: 14px; color: var(--ink-3); line-height: 1.4; margin-top: 2px; }
+.meta { display: flex; flex-wrap: wrap; gap: 2px 18px; margin-top: 18px; font-size: 13.5px; color: var(--ink-3); }
 
-/* ---------- nav ---------- */
-.nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--rule); }
-.nav .inner { display: flex; gap: 6px; overflow-x: auto; padding-block: 10px; scrollbar-width: none; }
-.nav a { white-space: nowrap; text-decoration: none; color: var(--ink-2); font-size: 14px; font-weight: 600; padding: 7px 14px; border-radius: 999px; }
-.nav a:hover { background: var(--accent-soft); color: var(--accent); }
+/* section links */
+.nav { border-bottom: 1px solid var(--rule); }
+.nav .inner { display: flex; gap: 22px; overflow-x: auto; padding-block: 12px; scrollbar-width: none; }
+.nav a { white-space: nowrap; font-size: 15px; font-weight: 500; }
 
-/* ---------- sections ---------- */
-main { display: flex; flex-direction: column; gap: 84px; padding-block: 56px 80px; }
-section { display: flex; flex-direction: column; gap: 26px; scroll-margin-top: 70px; }
-.section-head { display: flex; flex-direction: column; gap: 10px; max-width: 70ch; }
-.section-head p { font-size: 17px; color: var(--ink-2); }
-.banner { border: 1px solid var(--st-exposed); background: var(--surface); border-radius: 10px; padding: 12px 16px; font-size: 14px; color: var(--ink-2); max-width: 80ch; }
+/* sections */
+main { display: flex; flex-direction: column; gap: 64px; padding-block: 44px 72px; }
+section { display: flex; flex-direction: column; gap: 22px; scroll-margin-top: 16px; }
+.section-head { display: flex; flex-direction: column; gap: 8px; max-width: 68ch; }
+.section-head p { color: var(--ink-2); }
+.banner { border: 1px solid var(--st-exposed); padding: 12px 16px; font-size: 15px; color: var(--ink-2); max-width: 80ch; }
 .banner strong { color: var(--ink); }
-.card-box { background: var(--surface); border: 1px solid var(--rule); border-radius: 18px; padding: 24px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 22px; min-width: 0; }
-.card-box > h3 { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.card-box > h3 .fine { font-weight: 400; font-family: var(--font-body); }
-.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.box { border-top: 1px solid var(--rule-strong); padding-top: 14px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.box > h3 { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.box > h3 .fine { font-weight: 400; font-family: var(--font-body); }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; }
 
 /* population bar */
-.pop { display: flex; height: 64px; gap: 3px; }
-.pop .seg { display: flex; flex-direction: column; justify-content: center; padding: 0 12px; min-width: 6px; border-radius: 6px; color: #fff; overflow: hidden; }
-.pop .seg b { font-family: var(--font-display); font-size: 22px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
-.pop .seg span { font-size: 12px; font-weight: 600; opacity: .95; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pop .seg.dark { color: #20160a; }
+.pop { display: flex; height: 56px; gap: 2px; }
+.pop .seg { display: flex; flex-direction: column; justify-content: center; padding: 0 10px; min-width: 6px; color: #fff; overflow: hidden; }
+.pop .seg b { font-family: var(--font-display); font-size: 21px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.pop .seg span { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop .seg.dark { color: #1b1305; }
 .pop .seg.light { color: var(--ink); }
-.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13.5px; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--ink-2); }
 .legend span { display: inline-flex; align-items: center; gap: 7px; }
-.sw { width: 13px; height: 13px; border-radius: 4px; flex: none; display: inline-block; }
+.sw { width: 12px; height: 12px; flex: none; display: inline-block; }
 .sw.prelim { background: transparent; border: 2px dashed var(--ink-3); }
 
-/* funnel */
-.fun { display: flex; flex-direction: column; gap: 10px; }
-.fun-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; align-items: center; }
-.fun-label { font-size: 13.5px; color: var(--ink-2); line-height: 1.3; }
-.fun-track { height: 34px; display: flex; align-items: center; }
-.fun-bar { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--accent), #3d86ff); min-width: 6px; display: flex; align-items: center; padding-inline: 12px; color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 17px; font-variant-numeric: tabular-nums; }
-.fun-bar.last { background: linear-gradient(90deg, var(--st-patched), #38c982); }
+/* coverage funnel */
+.fun { display: flex; flex-direction: column; gap: 8px; }
+.fun-row { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 14px; align-items: center; }
+.fun-label { font-size: 14.5px; color: var(--ink-2); line-height: 1.3; }
+.fun-track { height: 28px; display: flex; align-items: center; }
+.fun-bar { height: 100%; background: var(--accent); min-width: 4px; display: flex; align-items: center; padding-inline: 10px; color: #fff; font-family: var(--font-display); font-weight: 600; font-size: 18px; font-variant-numeric: tabular-nums; }
+.fun-bar.last { background: var(--st-patched); }
 .fun-bar.withheld { background-color: var(--st-hidden); color: var(--ink); }
-.fun-out { margin-left: 10px; font-family: var(--font-display); font-weight: 800; font-size: 17px; font-variant-numeric: tabular-nums; }
-.fun-note { margin-left: 10px; font-size: 13px; color: var(--ink-3); }
+.fun-out { margin-left: 10px; font-family: var(--font-display); font-weight: 600; font-size: 18px; font-variant-numeric: tabular-nums; }
 
 /* trend columns */
 .chart { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 0 10px; }
@@ -162,142 +128,124 @@ section { display: flex; flex-direction: column; gap: 26px; scroll-margin-top: 7
 .plot::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(var(--rule), var(--rule)) 0 0/100% 1px no-repeat, linear-gradient(var(--rule), var(--rule)) 0 50%/100% 1px no-repeat, linear-gradient(var(--rule), var(--rule)) 0 100%/100% 1px no-repeat; }
 .col { position: relative; flex: 1 1 0; max-width: 96px; display: flex; flex-direction: column-reverse; gap: 2px; margin-inline: auto; width: 100%; }
 .col .seg { min-height: 3px; cursor: default; }
-.col .seg:first-child { border-radius: 0 0 4px 4px; }
-.col .seg:last-child { border-radius: 4px 4px 0 0; }
-.col .seg:only-child { border-radius: 4px; }
-.col.prelim .seg { opacity: .62; outline: 2px dashed var(--ink-3); outline-offset: -2px; }
-.col .top { position: absolute; left: 0; right: 0; top: -26px; text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
-.col .top.none { color: var(--ink-3); font-weight: 600; font-size: 12px; }
+.col.prelim .seg { opacity: .65; outline: 2px dashed var(--ink-3); outline-offset: -2px; }
+.col .top { position: absolute; left: 0; right: 0; top: -26px; text-align: center; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
+.col .top.none { color: var(--ink-3); font-weight: 500; font-size: 12.5px; }
 .xaxis { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 0 10px; margin-top: 8px; }
 .xlabels { display: flex; gap: 14px; padding-inline: 6px; }
-.xlabels div { flex: 1 1 0; max-width: 96px; margin-inline: auto; text-align: center; font-size: 12.5px; color: var(--ink-2); line-height: 1.3; }
-.xlabels b { display: block; color: var(--ink); font-weight: 700; }
-.xlabels .pre { color: var(--ink-3); font-size: 11.5px; font-weight: 600; }
-.xlabels .due { color: var(--alert); font-weight: 700; font-size: 11.5px; }
+.xlabels div { flex: 1 1 0; max-width: 96px; margin-inline: auto; text-align: center; font-size: 13px; color: var(--ink-2); line-height: 1.3; }
+.xlabels b { display: block; color: var(--ink); font-weight: 600; }
+.xlabels .pre { color: var(--ink-3); font-size: 12px; }
+.xlabels .due { color: var(--alert); font-weight: 600; font-size: 12px; }
 .hatch { background-image: repeating-linear-gradient(45deg, var(--st-withheld) 0 2px, transparent 2px 5px); background-color: var(--st-hidden); }
 .chart-wrap { padding-top: 28px; }
-.caveat { font-size: 14px; color: var(--ink-2); max-width: 80ch; border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; }
+.caveat { font-size: 15px; color: var(--ink-2); max-width: 78ch; border-left: 3px solid var(--rule); padding: 2px 0 2px 14px; }
 
 /* timeline */
 .tl { position: relative; height: 96px; margin: 8px 10px 0; }
-.tl-line { position: absolute; left: 0; right: 0; top: 46px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--st-patched), var(--alert)); opacity: .55; }
-.tl-dot { position: absolute; top: 40px; width: 16px; height: 16px; border-radius: 50%; transform: translateX(-50%); background: var(--accent); border: 3px solid var(--surface); box-sizing: content-box; box-shadow: 0 0 0 1px var(--rule); }
+.tl-line { position: absolute; left: 0; right: 0; top: 46px; height: 2px; background: var(--ink-3); }
+.tl-dot { position: absolute; top: 40px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-50%); background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
 .tl-dot.kind-onset { background: var(--st-exposed); }
-.tl-dot.kind-due { background: var(--st-ambiguous); border-radius: 4px; }
+.tl-dot.kind-due { background: var(--st-ambiguous); border-radius: 2px; }
 .tl-dot.kind-disclosure { background: var(--st-patched); }
-.tl-dot.kind-snapshot { width: 9px; height: 9px; top: 43px; background: var(--ink); }
-.tl-dot.kind-snapshot.prelim { background: var(--surface); border: 2px dashed var(--ink-3); width: 7px; height: 7px; top: 43px; }
-.tl-label { position: absolute; transform: translateX(-50%); font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; line-height: 1.25; text-align: center; }
-.tl-label small { display: block; font-weight: 400; color: var(--ink-3); font-size: 11.5px; }
+.tl-dot.kind-snapshot { width: 8px; height: 8px; top: 43px; background: var(--ink); }
+.tl-dot.kind-snapshot.prelim { background: var(--bg); border: 2px dashed var(--ink-3); width: 6px; height: 6px; top: 43px; }
+.tl-label { position: absolute; transform: translateX(-50%); font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; line-height: 1.25; text-align: center; }
+.tl-label small { display: block; font-weight: 400; color: var(--ink-3); font-size: 12px; }
 .tl-label.up { top: 0; }
 .tl-label.down { top: 64px; }
-ol.tl-list { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; color: var(--ink-2); }
+ol.tl-list { margin: 8px 0 0; padding-left: 20px; font-size: 14.5px; color: var(--ink-2); }
 ol.tl-list li { margin: 3px 0; }
-.nm-list { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); }
+.nm-list { margin: 0; padding-left: 18px; font-size: 14.5px; color: var(--ink-2); }
 
 /* unsupported */
-.unsup { display: grid; grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); gap: 28px; align-items: center; }
-.big { font-family: var(--font-display); font-weight: 800; font-size: clamp(64px, 10vw, 104px); line-height: .9; letter-spacing: -0.04em; color: var(--st-eol); font-variant-numeric: tabular-nums; }
-.big small { font-size: .4em; letter-spacing: 0; }
+.unsup { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr); gap: 32px; align-items: center; }
+.big { font-family: var(--font-display); font-weight: 600; font-size: clamp(60px, 9vw, 88px); line-height: .95; color: var(--st-eol); font-variant-numeric: tabular-nums; }
+.big small { font-size: .42em; }
 .unsup-rows { display: flex; flex-direction: column; gap: 10px; }
-.u-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 150px; gap: 12px; align-items: center; }
-.u-track { height: 18px; border-radius: 6px; background: var(--accent-soft); overflow: hidden; }
-.u-fill { height: 100%; background: var(--st-eol); border-radius: 6px; }
+.u-row { display: grid; grid-template-columns: 124px minmax(0, 1fr) 150px; gap: 12px; align-items: center; }
+.u-track { height: 16px; background: var(--wash); }
+.u-fill { height: 100%; background: var(--st-eol); }
 .u-track.withheld { background-image: repeating-linear-gradient(45deg, var(--st-withheld) 0 2px, transparent 2px 5px); background-color: var(--st-hidden); }
-.u-end { font-size: 13.5px; color: var(--ink-2); }
+.u-end { font-size: 14px; color: var(--ink-2); }
 .u-end b { color: var(--ink); font-family: var(--font-data); font-weight: 500; }
-.bar-label { font-size: 13.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.bar-label b { color: var(--ink); font-weight: 700; }
+.bar-label { font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.bar-label b { color: var(--ink); font-weight: 600; }
 
 /* intake */
-.steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-.step { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: var(--ink); border-top: 4px solid var(--rule); transition: transform .15s, box-shadow .15s; }
-.step:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
-.step .n { font-family: var(--font-display); font-size: 34px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
-.step .t { font-size: 13px; font-weight: 600; line-height: 1.25; }
-.step.t-live { border-top-color: var(--st-patched); }
-.step.t-validating { border-top-color: var(--accent); }
-.step.t-awaiting_fix { border-top-color: var(--st-ambiguous); }
-.step.t-archive_only { border-top-color: var(--st-eol); }
-.step.t-not_measurable { border-top-color: var(--st-hidden); }
-.step.t-untriaged { border-top-color: var(--rule); }
-.step.zero { opacity: .6; }
-.tier { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 70px; }
-.tier-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.tier-name { font-family: var(--font-display); font-weight: 700; font-size: 20px; }
-.tier-count { font-family: var(--font-data); font-size: 12px; font-weight: 500; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 1px 9px; }
-.tier-blurb { font-size: 14px; color: var(--ink-3); }
+.steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 2px solid var(--rule-strong); }
+.step { padding: 12px 14px 8px 0; margin-right: 14px; border-right: 1px solid var(--rule); text-decoration: none; color: var(--ink); display: flex; flex-direction: column; gap: 2px; }
+.step:last-child { border-right: 0; margin-right: 0; }
+.step .n { font-family: var(--font-display); font-size: 32px; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.step .t { font-size: 14px; line-height: 1.3; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.step.zero .n { color: var(--ink-3); }
+.tier { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 16px; }
+.tier-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
+.tier-name { font-family: var(--font-display); font-weight: 600; font-size: 21px; }
+.tier-count { font-family: var(--font-data); font-size: 12.5px; color: var(--ink-3); }
+.tier-blurb { font-size: 14.5px; color: var(--ink-3); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.empty { color: var(--ink-3); font-size: 14px; }
-.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 9px; min-width: 0; box-shadow: var(--shadow); }
-.card.is-live { border: 2px solid var(--st-patched); }
+.empty { color: var(--ink-3); font-size: 15px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card.is-live { border-left: 4px solid var(--st-patched); }
 .card .ids { color: var(--ink-3); overflow-wrap: anywhere; }
-.card dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 14px; }
+.card dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 14.5px; }
 .card dt { color: var(--ink-3); }
 .card dd { margin: 0; color: var(--ink-2); }
-.card .why { font-size: 14px; color: var(--ink-2); }
-.card a.jump { font-size: 14px; font-weight: 700; text-decoration: none; }
-.card a.jump:hover { text-decoration: underline; }
-.kev { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; background: rgba(255,122,69,.14); color: #b2400d; border-radius: 6px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .kev { color: #ffb08c; } }
-:root[data-theme="dark"] .kev { color: #ffb08c; }
+.card .why { font-size: 14.5px; color: var(--ink-2); }
+.card a.jump { font-size: 14.5px; font-weight: 600; }
+.kev { align-self: flex-start; color: var(--alert); font-size: 13px; font-weight: 700; }
 
 /* not measurable */
-.nm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
-.nm-num { font-family: var(--font-display); font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.nm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.nm-num { font-family: var(--font-display); font-size: 44px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 
-details.table-view summary { cursor: pointer; font-size: 14px; color: var(--accent); font-weight: 600; }
+details.table-view summary { cursor: pointer; font-size: 15px; color: var(--accent); font-weight: 600; }
 .tbl-wrap { overflow-x: auto; margin-top: 10px; }
-table { border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; min-width: 640px; width: 100%; }
+table { border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; min-width: 640px; width: 100%; }
 th, td { text-align: right; padding: 7px 11px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
-th { font-weight: 600; color: var(--ink-2); font-size: 12.5px; }
+th { font-weight: 600; color: var(--ink-2); font-size: 13px; }
 
-#tip { position: fixed; z-index: 30; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 13px; padding: 7px 10px; border-radius: 7px; max-width: 280px; line-height: 1.4; box-shadow: var(--shadow); }
-footer { background: var(--hero-1); color: var(--hero-ink-2); padding-block: 40px 56px; font-size: 14px; }
-footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880px; margin-inline: auto 0; margin-left: 0; }
-footer strong { color: var(--hero-ink); }
-footer a { color: #8fc0ff; }
+#tip { position: fixed; z-index: 30; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 13.5px; padding: 6px 9px; max-width: 280px; line-height: 1.4; }
+footer { border-top: 1px solid var(--rule); background: var(--wash); padding-block: 30px 44px; font-size: 15px; color: var(--ink-2); }
+footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880px; margin-left: 0; }
 
 @media (max-width: 900px) {
-  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fig:nth-child(2) { border-right: 0; margin-right: 0; }
+  .fig:nth-child(n+3) { border-top: 1px solid var(--rule); margin-top: 14px; }
   .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .step:nth-child(3) { border-right: 0; margin-right: 0; }
   .grid-2, .unsup { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 640px) {
-  .hero h1 { margin-top: 26px; }
-  .stats { gap: 10px; }
-  .stat { padding: 14px 14px 12px; border-radius: 14px; }
-  main { gap: 64px; padding-block: 44px 64px; }
-  .card-box { padding: 18px; border-radius: 16px; }
+  body { font-size: 16.5px; }
+  main { gap: 52px; padding-block: 36px 56px; }
   .fun-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .u-row { grid-template-columns: 78px minmax(0, 1fr); }
   .u-end { grid-column: 2; margin-top: -4px; }
   .pop { height: auto; flex-wrap: wrap; }
-  .pop .seg { min-height: 52px; }
+  .pop .seg { min-height: 48px; }
   .tl { display: none; }
   .plot, .xlabels { gap: 8px; }
   .chart, .xaxis { grid-template-columns: 30px minmax(0, 1fr); gap: 0 6px; }
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .step:nth-child(3) { border-right: 1px solid var(--rule); margin-right: 14px; }
+  .step:nth-child(2n) { border-right: 0; margin-right: 0; }
 }
-@media (prefers-reduced-motion: no-preference) {
-  .seg { transition: filter 120ms; }
-}
-.seg:hover, .seg:focus-visible { filter: brightness(1.1); }
+.seg:hover, .seg:focus-visible { filter: brightness(1.12); }
 </style>
 
 <div id="app">
-  <header class="hero" id="top">
+  <header class="masthead" id="top">
     <div class="inner">
-      <div class="hero-top">
-        <div class="eyebrow"><a class="hub" href="https://carrolluniversitycs.github.io/">Carroll University · Computer Science</a> · passive measurement</div>
-        <div class="live-pill" id="pill" hidden><i aria-hidden="true"></i><span id="pill-t"></span></div>
-      </div>
-      <h1>Patch <em>Watch</em></h1>
+      <div class="org"><a href="https://carrolluniversitycs.github.io/">Carroll University, Computer Science</a> · passive measurement</div>
+      <h1>Patch Watch</h1>
       <p class="lede" id="lede">Every vulnerability we have triaged, sorted by whether it can be measured from outside, and the patch state of Wisconsin's nonfederal .gov websites for each one we measure. Each site gets one ordinary homepage request per snapshot.</p>
       <div id="alert-slot"></div>
-      <div class="stats" id="stats"></div>
-      <div class="hero-meta" id="meta"></div>
+      <div class="figures" id="stats"></div>
+      <div class="meta" id="meta"></div>
     </div>
   </header>
   <nav class="nav" aria-label="Sections"><div class="inner" id="nav"></div></nav>
@@ -305,14 +253,14 @@ footer a { color: #8fc0ff; }
   <noscript><p class="banner">This page draws its charts with JavaScript. The same numbers are in the run reports under <span class="mono">reports/</span>.</p></noscript>
   <footer>
     <div class="inner">
-      <p><strong>Passive only.</strong> One homepage GET per domain per snapshot, with a declared user agent and published rate limits. Tribal nations' sites are not measured. Per-domain results go only to the principal investigator.</p>
-      <p>Opt out by emailing <a href="mailto:jforden@carrollu.edu">jforden@carrollu.edu</a> with your domain. It is removed within 24 hours.</p>
+      <p><strong>How this works.</strong> One homepage GET per domain per snapshot, with a declared user agent and published rate limits. Tribal nations' sites are not measured. Per-domain results go only to the principal investigator.</p>
+      <p>Opt out by emailing <a href="mailto:jforden@carrollu.edu">jforden@carrollu.edu</a> with your domain. It is removed within 24 hours. The per-run counts behind this page are published as <a href="https://github.com/CarrollUniversityCS/patch-watch/tree/main/reports">run reports</a>.</p>
     </div>
   </footer>
 </div>
 <div id="tip" hidden></div>
 
-<script type="application/json" id="pw-data">{"generated_utc": "2026-10-29T16:54:51Z", "commit": "8ed2604", "dirty": true, "suppressed": true, "tiers": [{"key": "live", "label": "Live", "blurb": "Approved at Gate A and measured on every snapshot."}, {"key": "validating", "label": "Detector in validation", "blurb": "A detector exists and must pass the test matrix before Gate A."}, {"key": "awaiting_fix", "label": "Awaiting a fixed release", "blurb": "Measurable, but there is no fixed version to rank against yet."}, {"key": "archive_only", "label": "Archive only", "blurb": "Read from Common Crawl captures; no live requests."}, {"key": "not_measurable", "label": "Not remotely measurable", "blurb": "Leaves no passive fingerprint in an ordinary web response."}, {"key": "untriaged", "label": "Untriaged", "blurb": "In the intake, not yet reviewed."}], "entries": [{"key": "php2shell", "title": "PHP2Shell", "cve_ids": ["CVE-2026-109618", "CVE-2026-109619"], "component": "PHP (php-src), Apache mod_php highest risk", "disclosed": "2026-10-21", "tier": "live", "event": "php2shell", "signal": "PHP version in the X-Powered-By or Server header of one homepage GET", "why": "The fixed releases (8.2.35, 8.3.36, 8.4.27, 8.5.12) change the version string, so a disclosed version ranks against them. Hidden versions and distro backports stay indeterminate.", "kev": {"added": "2026-10-26", "federal_due": "2026-10-29", "verified": true, "note": "Checked 2026-10-28 against CISA's KEV catalog version 2026.10.27 (github.com/cisagov/kev-data): both CVEs dateAdded 2026-10-26, dueDate 2026-10-29."}, "sources": ["https://www.php.net/archive/2026.php#2026-10-21-5", "https://www.nextgov.com/cybersecurity/2026/10/cisa-gives-federal-agencies-until-thursday-address-exploited-php-flaws/416838/"], "regions": [{"region": "wisconsin", "points": [{"run_id": "R20261024T140014Z_WI_20261024", "label": "WI_20261024", "started": "2026-10-24T14:00:14Z", "day": 3.0, "cells": {"PATCHED": "28", "EXPOSED": "<10", "EOL": "§", "AMBIGUOUS": "0", "OPAQUE": "155"}, "shown": {"PATCHED": 28, "AMBIGUOUS": 0, "OPAQUE": 155}, "P": "197", "P_n": 197, "withheld": 14, "funnel": {"domains": "833", "reached": "654", "php": "197", "visible": "42"}, "patched_share": "67%", "exposed": "14", "unsupported": {"n": "12", "of": "42", "share": "29%", "pct": 29}, "after_federal_due": false, "preliminary": true, "since_onset": -1.4}, {"run_id": "R20261026T215239Z_WI_20261026", "label": "WI_20261026", "started": "2026-10-26T21:52:39Z", "day": 5.3, "cells": {"PATCHED": "31", "EXPOSED": "0", "EOL": "10", "AMBIGUOUS": "0", "OPAQUE": "151"}, "shown": {"PATCHED": 31, "EXPOSED": 0, "EOL": 10, "AMBIGUOUS": 0, "OPAQUE": 151}, "P": "192", "P_n": 192, "withheld": 0, "funnel": {"domains": "833", "reached": "649", "php": "192", "visible": "41"}, "patched_share": "76%", "exposed": "10", "unsupported": {"n": "10", "of": "41", "share": "24%", "pct": 24}, "after_federal_due": false, "preliminary": true, "since_onset": 0.9}, {"run_id": "R20261028T140016Z_WI_20261028", "label": "WI_20261028", "started": "2026-10-28T14:00:17Z", "day": 7.0, "cells": {"PATCHED": "32", "EXPOSED": "0", "EOL": "10", "AMBIGUOUS": "0", "OPAQUE": "156"}, "shown": {"PATCHED": 32, "EXPOSED": 0, "EOL": 10, "AMBIGUOUS": 0, "OPAQUE": 156}, "P": "198", "P_n": 198, "withheld": 0, "funnel": {"domains": "833", "reached": "652", "php": "198", "visible": "42"}, "patched_share": "76%", "exposed": "10", "unsupported": {"n": "10", "of": "42", "share": "24%", "pct": 24}, "after_federal_due": false, "preliminary": true, "since_onset": 2.6}, {"run_id": "R20261029T140019Z_WI_20261029", "label": "WI_20261029", "started": "2026-10-29T14:00:19Z", "day": 8.0, "cells": {"PATCHED": "31", "EXPOSED": "0", "EOL": "11", "AMBIGUOUS": "0", "OPAQUE": "151"}, "shown": {"PATCHED": 31, "EXPOSED": 0, "EOL": 11, "AMBIGUOUS": 0, "OPAQUE": 151}, "P": "193", "P_n": 193, "withheld": 0, "funnel": {"domains": "833", "reached": "651", "php": "193", "visible": "42"}, "patched_share": "74%", "exposed": "11", "unsupported": {"n": "11", "of": "42", "share": "26%", "pct": 26}, "after_federal_due": true, "preliminary": true, "since_onset": 3.6}]}, {"region": "comparison", "points": [{"run_id": "R20261024T140522Z_CMP_20261024", "label": "CMP_20261024", "started": "2026-10-24T14:05:22Z", "day": 3.0, "cells": {"PATCHED": "<10", "EXPOSED": "<10", "EOL": "<10", "AMBIGUOUS": "0", "OPAQUE": "191"}, "shown": {"AMBIGUOUS": 0, "OPAQUE": 191}, "P": "212", "P_n": 212, "withheld": 21, "funnel": {"domains": "1961", "reached": "513", "php": "212", "visible": "21"}, "patched_share": "§", "exposed": "14", "unsupported": {"n": "<10", "of": "21", "share": "§", "pct": null}, "after_federal_due": false, "preliminary": true, "since_onset": -1.4}]}], "t0_utc": "2026-10-21T14:00:00Z", "onset": {"date": "2026-10-26", "kind": "kev_listing", "source": "CISA KEV dateAdded: a floor, not the first exploitation"}, "preliminary_before_days": 14, "timeline": [{"kind": "disclosure", "date": "2026-10-21", "label": "Fix released", "note": "2026-10-21"}, {"kind": "snapshot", "date": "2026-10-24", "region": "wisconsin", "label": "Snapshot", "day": 3.0, "preliminary": true, "since_onset": -1.4, "since_text": "1.4 days before CISA's KEV listing"}, {"kind": "onset", "date": "2026-10-26", "label": "Added to CISA's KEV list", "note": "CISA KEV dateAdded: a floor, not the first exploitation"}, {"kind": "snapshot", "date": "2026-10-26", "region": "wisconsin", "label": "Snapshot", "day": 5.3, "preliminary": true, "since_onset": 0.9, "since_text": "0.9 days after CISA's KEV listing"}, {"kind": "snapshot", "date": "2026-10-28", "region": "wisconsin", "label": "Snapshot", "day": 7.0, "preliminary": true, "since_onset": 2.6, "since_text": "2.6 days after CISA's KEV listing"}, {"kind": "due", "date": "2026-10-29", "label": "Federal deadline", "note": "binds federal civilian agencies, not state or local governments"}, {"kind": "snapshot", "date": "2026-10-29", "region": "wisconsin", "label": "Snapshot", "day": 8.0, "preliminary": true, "since_onset": 3.6, "since_text": "3.6 days after CISA's KEV listing"}]}, {"key": "cve_2026_115560", "title": "PHP session upload progress", "cve_ids": ["CVE-2026-115560"], "component": "PHP (php-src)", "disclosed": "", "tier": "awaiting_fix", "event": "cve_2026_115560", "signal": "Same PHP version header as PHP2Shell, once a fixed release exists", "why": "Pre-registered as threshold T2 (analysis plan §5.2). php.net says the fix ships in the next regular release, which is not out yet, so there is nothing to rank against.", "sources": ["https://www.php.net/archive/2026.php"]}, {"key": "cve_2024_4577", "title": "PHP-CGI argument injection", "cve_ids": ["CVE-2024-4577"], "component": "PHP-CGI on Windows (some locales)", "disclosed": "2024-06-06", "tier": "archive_only", "event": "cve_2024_4577", "signal": "PHP version header in archived Common Crawl captures", "why": "A 2024 adoption benchmark read from the archive only. Exposure needed Windows PHP-CGI, which a header cannot show, so it measures how fast sites adopt a release rather than how exposed they were.", "sources": ["https://github.com/php/php-src/security/advisories/GHSA-3qgc-jrrr-25jv"]}, {"key": "edk2_uefi_2026_10", "title": "TianoCore EDK II firmware flaw", "cve_ids": [], "component": "UEFI firmware built on EDK II (AMI, Insyde, Phoenix, Project Mu)", "disclosed": "2026-10", "tier": "not_measurable", "event": null, "signal": "None from the network", "why": "Firmware does not reveal its version to a web request. Reading it needs local access (dmidecode, fwupd) or a management interface (Redfish, IPMI), both outside a passive design. CVE ID not yet recorded here.", "sources": ["Ars Technica report shared 2026-10-28 (URL not recorded)"]}], "measurability": {"catalog_version": "2026.10.28", "total": 1762, "groups": [{"reason": "Client or local software: leaves no passive fingerprint in an ordinary web response", "count": 1228, "examples": ["Microsoft Windows", "Apple Multiple Products", "Google Chromium V8", "Microsoft Internet Explorer", "Adobe Flash Player", "Linux Kernel", "Microsoft Office", "Microsoft Win32k", "Adobe Acrobat and Reader", "Samsung Mobile Devices"]}], "still_open": {"edge_or_server_product": 428, "homepage_stack": 106}, "caveat": "A first-pass keyword sort over vendor and product names. It over- and under-counts, and no second rater has checked it. Entries stay in the catalog with their reason; none are dropped."}}</script>
+<script type="application/json" id="pw-data">{"generated_utc": "2026-10-29T17:35:10Z", "commit": "76fff53", "dirty": true, "suppressed": true, "tiers": [{"key": "live", "label": "Live", "blurb": "Approved at Gate A and measured on every snapshot."}, {"key": "validating", "label": "Detector in validation", "blurb": "A detector exists and must pass the test matrix before Gate A."}, {"key": "awaiting_fix", "label": "Awaiting a fixed release", "blurb": "Measurable, but there is no fixed version to rank against yet."}, {"key": "archive_only", "label": "Archive only", "blurb": "Read from Common Crawl captures; no live requests."}, {"key": "not_measurable", "label": "Not remotely measurable", "blurb": "Leaves no passive fingerprint in an ordinary web response."}, {"key": "untriaged", "label": "Untriaged", "blurb": "In the intake, not yet reviewed."}], "entries": [{"key": "php2shell", "title": "PHP2Shell", "cve_ids": ["CVE-2026-109618", "CVE-2026-109619"], "component": "PHP (php-src), Apache mod_php highest risk", "disclosed": "2026-10-21", "tier": "live", "event": "php2shell", "signal": "PHP version in the X-Powered-By or Server header of one homepage GET", "why": "The fixed releases (8.2.35, 8.3.36, 8.4.27, 8.5.12) change the version string, so a disclosed version ranks against them. Hidden versions and distro backports stay indeterminate.", "kev": {"added": "2026-10-26", "federal_due": "2026-10-29", "verified": true, "note": "Checked 2026-10-28 against CISA's KEV catalog version 2026.10.27 (github.com/cisagov/kev-data): both CVEs dateAdded 2026-10-26, dueDate 2026-10-29."}, "sources": ["https://www.php.net/archive/2026.php#2026-10-21-5", "https://www.nextgov.com/cybersecurity/2026/10/cisa-gives-federal-agencies-until-thursday-address-exploited-php-flaws/416838/"], "regions": [{"region": "wisconsin", "points": [{"run_id": "R20261024T140014Z_WI_20261024", "label": "WI_20261024", "started": "2026-10-24T14:00:14Z", "day": 3.0, "cells": {"PATCHED": "28", "EXPOSED": "<10", "EOL": "§", "AMBIGUOUS": "0", "OPAQUE": "155"}, "shown": {"PATCHED": 28, "AMBIGUOUS": 0, "OPAQUE": 155}, "P": "197", "P_n": 197, "withheld": 14, "funnel": {"domains": "833", "reached": "654", "php": "197", "visible": "42"}, "patched_share": "67%", "exposed": "14", "unsupported": {"n": "12", "of": "42", "share": "29%", "pct": 29}, "after_federal_due": false, "preliminary": true, "since_onset": -1.4}, {"run_id": "R20261026T215239Z_WI_20261026", "label": "WI_20261026", "started": "2026-10-26T21:52:39Z", "day": 5.3, "cells": {"PATCHED": "31", "EXPOSED": "0", "EOL": "10", "AMBIGUOUS": "0", "OPAQUE": "151"}, "shown": {"PATCHED": 31, "EXPOSED": 0, "EOL": 10, "AMBIGUOUS": 0, "OPAQUE": 151}, "P": "192", "P_n": 192, "withheld": 0, "funnel": {"domains": "833", "reached": "649", "php": "192", "visible": "41"}, "patched_share": "76%", "exposed": "10", "unsupported": {"n": "10", "of": "41", "share": "24%", "pct": 24}, "after_federal_due": false, "preliminary": true, "since_onset": 0.9}, {"run_id": "R20261028T140016Z_WI_20261028", "label": "WI_20261028", "started": "2026-10-28T14:00:17Z", "day": 7.0, "cells": {"PATCHED": "32", "EXPOSED": "0", "EOL": "10", "AMBIGUOUS": "0", "OPAQUE": "156"}, "shown": {"PATCHED": 32, "EXPOSED": 0, "EOL": 10, "AMBIGUOUS": 0, "OPAQUE": 156}, "P": "198", "P_n": 198, "withheld": 0, "funnel": {"domains": "833", "reached": "652", "php": "198", "visible": "42"}, "patched_share": "76%", "exposed": "10", "unsupported": {"n": "10", "of": "42", "share": "24%", "pct": 24}, "after_federal_due": false, "preliminary": true, "since_onset": 2.6}, {"run_id": "R20261029T140019Z_WI_20261029", "label": "WI_20261029", "started": "2026-10-29T14:00:19Z", "day": 8.0, "cells": {"PATCHED": "31", "EXPOSED": "0", "EOL": "11", "AMBIGUOUS": "0", "OPAQUE": "151"}, "shown": {"PATCHED": 31, "EXPOSED": 0, "EOL": 11, "AMBIGUOUS": 0, "OPAQUE": 151}, "P": "193", "P_n": 193, "withheld": 0, "funnel": {"domains": "833", "reached": "651", "php": "193", "visible": "42"}, "patched_share": "74%", "exposed": "11", "unsupported": {"n": "11", "of": "42", "share": "26%", "pct": 26}, "after_federal_due": true, "preliminary": true, "since_onset": 3.6}]}, {"region": "comparison", "points": [{"run_id": "R20261024T140522Z_CMP_20261024", "label": "CMP_20261024", "started": "2026-10-24T14:05:22Z", "day": 3.0, "cells": {"PATCHED": "<10", "EXPOSED": "<10", "EOL": "<10", "AMBIGUOUS": "0", "OPAQUE": "191"}, "shown": {"AMBIGUOUS": 0, "OPAQUE": 191}, "P": "212", "P_n": 212, "withheld": 21, "funnel": {"domains": "1961", "reached": "513", "php": "212", "visible": "21"}, "patched_share": "§", "exposed": "14", "unsupported": {"n": "<10", "of": "21", "share": "§", "pct": null}, "after_federal_due": false, "preliminary": true, "since_onset": -1.4}]}], "t0_utc": "2026-10-21T14:00:00Z", "onset": {"date": "2026-10-26", "kind": "kev_listing", "source": "CISA KEV dateAdded: a floor, not the first exploitation"}, "preliminary_before_days": 14, "timeline": [{"kind": "disclosure", "date": "2026-10-21", "label": "Fix released", "note": "2026-10-21"}, {"kind": "snapshot", "date": "2026-10-24", "region": "wisconsin", "label": "Snapshot", "day": 3.0, "preliminary": true, "since_onset": -1.4, "since_text": "1.4 days before CISA's KEV listing"}, {"kind": "onset", "date": "2026-10-26", "label": "Added to CISA's KEV list", "note": "CISA KEV dateAdded: a floor, not the first exploitation"}, {"kind": "snapshot", "date": "2026-10-26", "region": "wisconsin", "label": "Snapshot", "day": 5.3, "preliminary": true, "since_onset": 0.9, "since_text": "0.9 days after CISA's KEV listing"}, {"kind": "snapshot", "date": "2026-10-28", "region": "wisconsin", "label": "Snapshot", "day": 7.0, "preliminary": true, "since_onset": 2.6, "since_text": "2.6 days after CISA's KEV listing"}, {"kind": "due", "date": "2026-10-29", "label": "Federal deadline", "note": "binds federal civilian agencies, not state or local governments"}, {"kind": "snapshot", "date": "2026-10-29", "region": "wisconsin", "label": "Snapshot", "day": 8.0, "preliminary": true, "since_onset": 3.6, "since_text": "3.6 days after CISA's KEV listing"}]}, {"key": "cve_2026_115560", "title": "PHP session upload progress", "cve_ids": ["CVE-2026-115560"], "component": "PHP (php-src)", "disclosed": "", "tier": "awaiting_fix", "event": "cve_2026_115560", "signal": "Same PHP version header as PHP2Shell, once a fixed release exists", "why": "Pre-registered as threshold T2 (analysis plan §5.2). php.net says the fix ships in the next regular release, which is not out yet, so there is nothing to rank against.", "sources": ["https://www.php.net/archive/2026.php"]}, {"key": "cve_2024_4577", "title": "PHP-CGI argument injection", "cve_ids": ["CVE-2024-4577"], "component": "PHP-CGI on Windows (some locales)", "disclosed": "2024-06-06", "tier": "archive_only", "event": "cve_2024_4577", "signal": "PHP version header in archived Common Crawl captures", "why": "A 2024 adoption benchmark read from the archive only. Exposure needed Windows PHP-CGI, which a header cannot show, so it measures how fast sites adopt a release rather than how exposed they were.", "sources": ["https://github.com/php/php-src/security/advisories/GHSA-3qgc-jrrr-25jv"]}, {"key": "edk2_uefi_2026_10", "title": "TianoCore EDK II firmware flaw", "cve_ids": [], "component": "UEFI firmware built on EDK II (AMI, Insyde, Phoenix, Project Mu)", "disclosed": "2026-10", "tier": "not_measurable", "event": null, "signal": "None from the network", "why": "Firmware does not reveal its version to a web request. Reading it needs local access (dmidecode, fwupd) or a management interface (Redfish, IPMI), both outside a passive design. CVE ID not yet recorded here.", "sources": ["Ars Technica report shared 2026-10-28 (URL not recorded)"]}], "measurability": {"catalog_version": "2026.10.28", "total": 1762, "groups": [{"reason": "Client or local software: leaves no passive fingerprint in an ordinary web response", "count": 1228, "examples": ["Microsoft Windows", "Apple Multiple Products", "Google Chromium V8", "Microsoft Internet Explorer", "Adobe Flash Player", "Linux Kernel", "Microsoft Office", "Microsoft Win32k", "Adobe Acrobat and Reader", "Samsung Mobile Devices"]}], "still_open": {"edge_or_server_product": 428, "homepage_stack": 106}, "caveat": "A first-pass keyword sort over vendor and product names. It over- and under-counts, and no second rater has checked it. Entries stay in the catalog with their reason; none are dropped."}}</script>
 <script>
 (function () {
   "use strict";
@@ -380,18 +328,15 @@ footer a { color: #8fc0ff; }
   // ---- hero: lede, alert, headline numbers, meta
   var meta = document.getElementById("meta");
   meta.appendChild(el("span", { text: "Updated " + D.generated_utc.replace("T", " ").replace("Z", " UTC") }));
-  meta.appendChild(el("span", { html: "Code <span class=\"mono\">" + D.commit + "</span>" + (D.dirty ? " (uncommitted changes)" : "") }));
+  meta.appendChild(el("span", { html: "Code <span class=\"mono\">" + D.commit + "</span>" + (D.dirty && !D.suppressed ? " (uncommitted changes)" : "") }));
   meta.appendChild(el("span", { text: "Counts are domains" }));
   if (D.suppressed) meta.appendChild(el("span", { text: "Counts 1–9 shown as <10" }));
   else main.appendChild(el("p", { class: "banner", html: "<strong>Unsuppressed.</strong> Raw counts for the principal investigator. Do not publish or share this file." }));
 
   if (hero && last) {
-    document.getElementById("lede").innerHTML = "<strong>" + hero.title + "</strong> is being used against servers right now. We check Wisconsin's local government websites once a day to see who has installed the fix, and we publish only group totals.";
-    var pill = document.getElementById("pill");
-    pill.hidden = false;
-    document.getElementById("pill-t").textContent = "Latest snapshot " + fmtDate(last.started) + " · day " + last.day.toFixed(0) + " since the fix";
+    document.getElementById("lede").textContent = "On " + fmtDate(last.started) + ", " + last.funnel.domains + " Wisconsin government websites were checked for the " + hero.title + " fix. " + (last.patched_share === WITHHELD ? "The patched share is withheld" : last.patched_share + " of the " + last.funnel.visible + " sites that show a PHP version we can rank are patched") + "; " + last.cells.OPAQUE + " more hide their version, so we cannot tell. Only group totals are published.";
     if (hero.kev) {
-      document.getElementById("alert-slot").appendChild(el("div", { class: "alert", html: "<span class=\"tag\">Exploited</span> On CISA's known-exploited list since <b>" + fmtDate(hero.kev.added) + "</b> · federal deadline <b>" + fmtDate(hero.kev.federal_due) + "</b>" }));
+      document.getElementById("alert-slot").appendChild(el("p", { class: "notice", html: "<strong>Known exploited.</strong> CISA added this flaw to its Known Exploited Vulnerabilities list on " + fmtDate(hero.kev.added) + ". Federal civilian agencies had until " + fmtDate(hero.kev.federal_due) + " to patch." }));
     }
     var withheld = last.patched_share === WITHHELD;
     document.getElementById("stats").appendChild(statTile("s-base", last.funnel.domains, "Wisconsin sites checked", "One homepage request each, per snapshot."));
@@ -400,11 +345,10 @@ footer a { color: #8fc0ff; }
     document.getElementById("stats").appendChild(statTile("s-warn", last.cells.OPAQUE, "hide their version", "PHP is present; we cannot tell if it is fixed."));
   } else {
     document.getElementById("stats").style.display = "none";
-    document.querySelector(".hero-meta").style.paddingBottom = "28px";
-    document.getElementById("alert-slot").style.display = "none";
+        document.getElementById("alert-slot").style.display = "none";
   }
   function statTile(cls, v, label, detail) {
-    return el("div", { class: "stat " + cls }, [el("div", { class: "v", text: String(v) }), el("div", { class: "l", text: label }), el("div", { class: "d", text: detail })]);
+    return el("div", { class: "fig " + cls }, [el("div", { class: "v", text: String(v) }), el("div", { class: "l", text: label }), el("div", { class: "d", text: detail })]);
   }
 
   // ---- nav
@@ -415,8 +359,8 @@ footer a { color: #8fc0ff; }
   live.forEach(function (e) {
     var sec = el("section", { id: e.key, "aria-labelledby": e.key + "-h" });
     var head = el("div", { class: "section-head" }, [
-      el("div", { class: "eyebrow", text: "Patch state · fix released " + fmtDate(e.t0_utc) }),
-      el("h2", { id: e.key + "-h", text: "Who has installed the " + e.title + " fix?" }),
+      el("p", { class: "fine", text: "Fix released " + fmtDate(e.t0_utc) }),
+      el("h2", { id: e.key + "-h", text: "Patch state: who has installed the " + e.title + " fix?" }),
       e.kev ? el("p", { text: "Federal civilian agencies must patch by " + fmtDate(e.kev.federal_due) + ". State and local governments are not bound by that date, so the columns on or after it show how they compare." + (e.kev.verified ? "" : " Dates not yet verified against CISA's list.") }) : null,
       el("div", { class: "mono muted", text: e.cve_ids.join(" · ") })
     ]);
@@ -426,7 +370,7 @@ footer a { color: #8fc0ff; }
     var p0 = e.regions[0], lastp = p0.points[p0.points.length - 1];
 
     // latest snapshot: who is where
-    var snap = el("div", { class: "card-box" });
+    var snap = el("div", { class: "box" });
     snap.appendChild(el("h3", null, [REGION[p0.region] + ", latest snapshot", el("span", { class: "fine", text: " · the " + lastp.P + " sites that show PHP, " + fmtDate(lastp.started) })]));
     var pop = el("div", { class: "pop", role: "img", "aria-label": barLabel(lastp, e) });
     if (lastp.P_n) {
@@ -455,7 +399,7 @@ footer a { color: #8fc0ff; }
     var two = el("div", { class: "grid-2" });
     two.appendChild(funnelBlock(p0, lastp));
     var tl = timelineBlock(e);
-    if (tl) two.appendChild(el("div", { class: "card-box" }, [tl])); else two.style.gridTemplateColumns = "minmax(0, 1fr)";
+    if (tl) two.appendChild(el("div", { class: "box" }, [tl])); else two.style.gridTemplateColumns = "minmax(0, 1fr)";
     sec.appendChild(two);
 
     e.regions.forEach(function (rg) { sec.appendChild(trendBlock(e, rg)); });
@@ -488,7 +432,7 @@ footer a { color: #8fc0ff; }
       ["Show a version we can rank", f.visible, ""]
     ];
     var top = num(f.domains) || 1;
-    var box = el("div", { class: "card-box", role: "group", "aria-label": "Coverage at the latest " + REGION[p.region] + " snapshot" }, [
+    var box = el("div", { class: "box", role: "group", "aria-label": "Coverage at the latest " + REGION[p.region] + " snapshot" }, [
       el("h3", null, ["How much can we actually see?", el("span", { class: "fine", text: "from every site to the ones we can rank" })])
     ]);
     var fun = el("div", { class: "fun" });
@@ -509,7 +453,7 @@ footer a { color: #8fc0ff; }
 
   // One column per snapshot, patched at the bottom. Dashed columns are preliminary.
   function trendBlock(e, rg) {
-    var box = el("div", { class: "card-box" }, [
+    var box = el("div", { class: "box" }, [
       el("h3", null, [REGION[rg.region] || rg.region, el("span", { class: "fine", text: "share of sites with PHP, one column per snapshot" })])
     ]);
     var wrap = el("div", { class: "chart-wrap" });
@@ -562,12 +506,11 @@ footer a { color: #8fc0ff; }
     var latest = rows[rows.length - 1];
     var sec = el("section", { id: "unsupported", "aria-labelledby": "unsup-h" }, [
       el("div", { class: "section-head" }, [
-        el("div", { class: "eyebrow", text: "Unsupported software" }),
         el("h2", { id: "unsup-h", text: "Sites running PHP its maker no longer fixes" }),
         el("p", { text: "Share of sites showing a PHP version we can place that run a branch PHP no longer fixes (8.1 or older). Sites that hide the version are not in this share, so read it together with the coverage figures above." })
       ])
     ]);
-    var box = el("div", { class: "card-box", role: "group", "aria-label": "Unsupported PHP over time" });
+    var box = el("div", { class: "box", role: "group", "aria-label": "Unsupported PHP over time" });
     var shownLatest = latest.u.pct !== null;
     var wrap = el("div", { class: "unsup" }, [
       el("div", null, [
@@ -647,7 +590,6 @@ footer a { color: #8fc0ff; }
   D.entries.forEach(function (e) { (byTier[e.tier] = byTier[e.tier] || []).push(e); });
   var intake = el("section", { id: "intake", "aria-labelledby": "intake-h" }, [
     el("div", { class: "section-head" }, [
-      el("div", { class: "eyebrow", text: "Intake" }),
       el("h2", { id: "intake-h", text: "Vulnerabilities, by how measurable they are" }),
       el("p", { text: D.entries.length + " triaged so far, " + (byTier.live || []).length + " measured live. Most vulnerabilities leave no trace in an ordinary web response, so they stop at a lower tier and are kept here rather than dropped." })
     ])
@@ -674,7 +616,7 @@ footer a { color: #8fc0ff; }
         dl.appendChild(el("dd", { text: "On CISA's KEV list since " + fmtDate(e.kev.added) + ". Federal deadline " + fmtDate(e.kev.federal_due) + (e.kev.verified ? "" : " (not yet verified against CISA's list)") }));
       }
       var card = el("article", { class: "card" + (e.tier === "live" ? " is-live" : "") }, [
-        e.kev ? el("span", { class: "kev", text: "Known exploited" }) : null,
+        e.kev ? el("span", { class: "kev", text: "On CISA's known-exploited list" }) : null,
         el("h3", { text: e.title }),
         el("div", { class: "ids mono", text: ids }),
         dl,
@@ -696,7 +638,6 @@ footer a { color: #8fc0ff; }
     if (!m) return null;
     var sec = el("section", { id: "nm", "aria-labelledby": "nm-h" }, [
       el("div", { class: "section-head" }, [
-        el("div", { class: "eyebrow", text: "Not remotely measurable" }),
         el("h2", { id: "nm-h", text: "What the intake cannot see from outside" }),
         el("p", { text: "Of " + m.total + " vulnerabilities on CISA's Known Exploited list (catalog " + m.catalog_version + "), these leave no trace in an ordinary web response, so a homepage observer cannot judge whether they are patched. They stay listed with their reason rather than being dropped." })
       ])
@@ -738,7 +679,7 @@ footer a { color: #8fc0ff; }
       el("thead", null, [el("tr", null, head.map(function (h) { return el("th", { scope: "col", text: h }); }))]),
       el("tbody", null, rows.map(function (r) { return el("tr", null, r.map(function (c) { return el("td", { text: String(c) }); })); }))
     ]);
-    return el("details", { class: "table-view card-box" }, [el("summary", { text: "Show the numbers as a table" }), el("div", { class: "tbl-wrap" }, [table])]);
+    return el("details", { class: "table-view box" }, [el("summary", { text: "Show the numbers as a table" }), el("div", { class: "tbl-wrap" }, [table])]);
   }
 
   var nm = measurabilityBlock(D.measurability);
