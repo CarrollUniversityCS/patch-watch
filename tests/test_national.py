@@ -88,6 +88,7 @@ class Day:
         monkeypatch.setattr(national_day.ld, "stop_rule_met", lambda: "")
         monkeypatch.setattr(national_day.ld, "prior_run_for", lambda region, now: "")
         monkeypatch.setattr(national_day, "wisconsin_done_today", lambda now: True)
+        monkeypatch.setattr(national_day, "national_halt_since_release", lambda: "")
         monkeypatch.setattr(national.__dict__["config"], "DATA_DIR", tmp_path)
         notice = tmp_path / "notice.txt"
         notice.write_text("2026-10-30 confirmed\n", encoding="utf-8")
@@ -116,7 +117,8 @@ def test_with_everything_met_the_wrapper_runs_the_national_region_on_the_release
     ("no_wave", national_day.EXIT_NOT_RELEASED), ("no_notice", national_day.EXIT_NO_NOTICE),
     ("bad_waves", national_day.EXIT_BAD_WAVES), ("wi_not_done", national_day.EXIT_WI_NOT_DONE),
     ("abuse", national_day.ld.EXIT_HALTED), ("already", national_day.ld.EXIT_ALREADY_RAN),
-    ("stopped", national_day.ld.EXIT_STOP_RULE), ("late", national_day.ld.EXIT_TOO_LATE)])
+    ("stopped", national_day.ld.EXIT_STOP_RULE), ("late", national_day.ld.EXIT_TOO_LATE),
+    ("halted", national_day.EXIT_NATIONAL_HALTED)])
 def test_each_missing_precondition_refuses_and_sends_nothing(monkeypatch, tmp_path, breaker, code):
     d = Day(monkeypatch, tmp_path)
     if breaker == "no_wave":
@@ -131,6 +133,8 @@ def test_each_missing_precondition_refuses_and_sends_nothing(monkeypatch, tmp_pa
         (tmp_path / "abuse.flag").write_text("x", encoding="utf-8")
     elif breaker == "already":
         monkeypatch.setattr(national_day.ld, "prior_run_for", lambda region, now: "run_id=x")
+    elif breaker == "halted":
+        monkeypatch.setattr(national_day, "national_halt_since_release", lambda: "R1 halted: overload")
     elif breaker == "stopped":
         monkeypatch.setattr(national_day.ld, "stop_rule_met", lambda: "nothing exposed")
     elif breaker == "late":
