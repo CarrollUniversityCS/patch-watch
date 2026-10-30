@@ -77,6 +77,26 @@ government host. It talks to Common Crawl only, enforced by `CCClient.check_host
 is slow by design (one request at a time, at least 1.5 s apart, with backoff), and it is
 resumable: re-run the same command after an interruption.
 
+## The national extension (waves)
+
+Separate from the Wisconsin and comparison schedule; `scripts/live_day.py` still reads only `data/wi_frame.csv`.
+Governed by `docs/analysis_plan_amendment_national.md`.
+
+* **Files** (all in `data/`, git-ignored): `master_frame.csv` (validated names), `national_waves.csv` and
+  `national_waves_meta.json` (wave assignment: `python src/national.py build`, then `verify`), `national_active_wave.txt`
+  (the released wave, 1 to 3), `national_sample_w<N>.csv` and `national_excluded.csv` (written at run time).
+* **Release a wave** (the PI only): write `1`, `2` or `3` into `data/national_active_wave.txt`; create
+  `logs/notice_live.txt` (one line, the date) once the public notice names the extension. Remove the first file to pause.
+* **Task:** `powershell -ExecutionPolicy Bypass -File scripts\install_national_schedule.ps1` installs
+  "patch-watch national day" (10:00). `scripts/national_day.cmd` supplies the Gate A marker; `scripts/national_day.py`
+  refuses on a non-snapshot day, after 19:00, with `logs/abuse.flag`, with no released wave, without the notice flag,
+  when the wave files do not re-derive, when Wisconsin has not completed today, or when a national run already happened.
+* **Before each wave:** re-run the name check for that wave's names (`scripts/dns_validate.py`), `python src/national.py verify`,
+  `python scripts/national_dry_run.py --national`, and confirm the last backup. A name the second resolver does not confirm is
+  left out automatically and listed in `data/national_excluded.csv`.
+* **Halts:** the same kill switch and abuse flag apply. A national halt does not touch Wisconsin's reading, which runs first.
+* **Operator mail:** `docs/OPERATOR_REPLIES.md`.
+
 ## What a run produces
 
 | Where | What |
@@ -120,7 +140,7 @@ An opt-out email (to jforden@carrollu.edu) is a two-step action:
 
 The run stops itself and says why if:
 
-- **Overload:** more than 10% of a rolling window of 50 phase outcomes are 429 or 5xx.
+- **Overload:** more than 10% of a rolling window of 200 phase outcomes are 429 or 5xx.
   An outcome is one per budget-charged phase; redirect hops inside a phase are not
   separate entries. `KillSwitch.bad()` counts `status >= 500`, so 5xx is included.
 - **Block rate:** more than 30% of the same window are 401 or 403. That means the

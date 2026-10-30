@@ -525,8 +525,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limit", type=int, help="only the first N domains (smoke test)")
     ap.add_argument("--order-seed", type=int,
                     help="fetch-order shuffle seed (default: drawn per run, always recorded)")
-    ap.add_argument("--region", choices=("wisconsin", "comparison"),
-                    help="snapshot one frame region only (plan §6: always run them separately)")
+    ap.add_argument("--region", choices=("wisconsin", "comparison", "national"),
+                    help="snapshot one frame region only (plan §6: always run them separately; "
+                         "'national' is the wave sample of the extension, run by scripts/national_day.py)")
     ap.add_argument("--mock", action="store_true",
                     help="loopback mock server only - no DNS, no real domain, gate not required")
     ap.add_argument("--mock-rotate", type=int, default=0,

@@ -17,7 +17,7 @@ in a comment:
   rule 4  rate limits          20 workers, 1 in flight per resolved IP, 100-500 ms
                                jitter, 10 s connect / 20 s total, no retry on 429/503
   rule 5  opt-out              blocklist re-read at run start, skipped domains recorded
-  rule 6  kill switch          rolling window of 50 phase outcomes (redirect hops
+  rule 6  kill switch          rolling window of 200 phase outcomes (redirect hops
                                are not separate entries): trips above 10% 429/5xx
                                (overload) or above 30% 401/403 (blocked broadly);
                                or if logs/abuse.flag appears (re-read before every
@@ -29,6 +29,9 @@ in a comment:
 Test-only escape hatch: `url_for` maps a domain to a URL so the crawler can be
 driven against the loopback mock server stack. It never relaxes any check above;
 the approved-domain set and the redirect containment root are still enforced.
+
+The rolling window was enlarged from 50 to 200 outcomes on 2026-10-26; thresholds
+and halt behavior are unchanged.
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ import re
 import socket
 import ssl
 import time
+import zlib
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -403,6 +407,43 @@ def derive_body_hints(body: bytes) -> dict[str, bool]:
     }
 
 
+async def _read_capped(resp: httpx.Response, cap: int) -> bytearray:
+    """Read at most `cap` DECODED body bytes. gzip and deflate are inflated here with a size limit, so a
+    compressed bomb cannot expand past the cap in memory (httpx decodes a whole network chunk at once)."""
+    enc = resp.headers.get("content-encoding", "").strip().lower()
+    body = bytearray()
+    if enc not in ("gzip", "x-gzip", "deflate"):
+        async for chunk in resp.aiter_bytes():
+            body += chunk
+            if len(body) >= cap:
+                break
+        del body[cap:]
+        return body
+    dec = zlib.decompressobj(31 if enc != "deflate" else 15)
+    first = True
+    async for chunk in resp.aiter_raw():
+        data = chunk
+        try:
+            while data and len(body) < cap:
+                body += dec.decompress(data, cap - len(body))
+                data = dec.unconsumed_tail
+                if dec.eof:
+                    break
+        except zlib.error:
+            if first and enc == "deflate":              # some servers send raw deflate with no zlib header
+                dec = zlib.decompressobj(-15)
+                try:
+                    body += dec.decompress(chunk, cap)
+                except zlib.error:
+                    break
+            else:
+                break
+        first = False
+        if len(body) >= cap or dec.eof:
+            break
+    return body
+
+
 # --------------------------------------------------------------------------- crawler
 class Crawler:
     def __init__(self, approved_domains: Iterable[str], *, blocklist: set[str] | None = None,
@@ -467,16 +508,20 @@ class Crawler:
             obs.resolved_ip = ip
             await self.ips.acquire(ip)
             t0 = time.monotonic()
+            seen: list[httpx.Response] = []
+
+            async def _keep(r: httpx.Response, _seen: list[httpx.Response] = seen) -> None:
+                _seen.append(r)
+
+            client.event_hooks = {"request": client.event_hooks["request"], "response": [_keep]}
             try:
-                async with client.stream("GET", current, headers=self._request_headers(),
-                                         follow_redirects=False) as resp:
+                # httpx timeouts apply to each read, so a body dripped a byte at a time never trips
+                # them; the deadline bounds the whole request, headers and body together.
+                async with asyncio.timeout(self.total_timeout), client.stream(
+                        "GET", current, headers=self._request_headers(), follow_redirects=False) as resp:
                     raw = [[str(n), str(v)] for n, v in resp.headers.multi_items()]
-                    body = bytearray()
-                    async for chunk in resp.aiter_bytes():
-                        body += chunk
-                        if len(body) >= config.MAX_BODY_BYTES:
-                            break
-                    body_len = min(len(body), config.MAX_BODY_BYTES)
+                    body = await _read_capped(resp, config.MAX_BODY_BYTES)
+                    body_len = len(body)
                     status = resp.status_code
                 if self.ledger:
                     await self.ledger.record(self.run_id, domain, current, phase, hop, status, None)
@@ -527,7 +572,28 @@ class Crawler:
                     current = nxt
                     continue
                 return obs
-            except httpx.TimeoutException as exc:
+            except httpx.InvalidURL:
+                # httpx builds the next request even when told not to follow, and raises for a
+                # Location with no host (javascript:, data:). The response arrived intact, so
+                # record it as the off-domain redirect it is, as file: and ftp: already are.
+                resp = seen[-1] if seen else None
+                if resp is None or not 300 <= resp.status_code < 400:
+                    raise
+                loc = resp.headers.get("location", "")
+                if self.ledger:
+                    await self.ledger.record(self.run_id, domain, current, phase, hop, resp.status_code, None)
+                obs.latency_ms = int((time.monotonic() - t0) * 1000)
+                obs.final_url = current
+                obs.status_code = resp.status_code
+                obs.headers_raw = [[str(n), str(v)] for n, v in resp.headers.multi_items()]
+                obs.headers = {}
+                add_headers(obs.headers, obs.headers_raw)
+                obs.redirect_chain.append({"hop": str(hop), "from": current, "to": loc,
+                                           "status": str(resp.status_code)})
+                log.warning("REFUSING %s: %s — not on approved list (hard rule 1)", "redirect", loc[:80])
+                obs.redirect_off_domain = True
+                return obs
+            except (httpx.TimeoutException, TimeoutError) as exc:
                 if self.ledger:
                     await self.ledger.record(self.run_id, domain, current, phase, hop, None, "timeout")
                 obs.latency_ms = int((time.monotonic() - t0) * 1000)

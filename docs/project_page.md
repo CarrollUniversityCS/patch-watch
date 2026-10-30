@@ -11,11 +11,17 @@ agent at your firewall or WAF. We honour that too: a site that refuses us is rec
 
 # What we measure
 
-Carroll University (Waukesha, Wisconsin) is measuring how quickly Wisconsin local and
-state government websites on .gov update one piece of software, the PHP scripting
-language, after a security fix is published. Minnesota, Illinois, Michigan and Iowa .gov
-sites are included for comparison, so the study can say whether Wisconsin's response was
-typical. They receive exactly the same single request a day.
+Carroll University (Waukesha, Wisconsin) is measuring how quickly local and state
+government websites on .gov update one piece of software, the PHP scripting language,
+after a security fix is published. We began with Wisconsin. Minnesota, Illinois, Michigan
+and Iowa .gov sites are included for comparison, so the study can say whether Wisconsin's
+response was typical, and we are extending the same measurement in stages to the .gov
+sites of the other states and the District of Columbia. Every site receives exactly the
+same single request a day, under the same limits, whichever state it is in.
+
+Before a name is measured we check, with ordinary public Domain Name System lookups,
+that it exists. Those lookups go to DNS servers (our university network's and two public
+ones), never to your website, and a name that does not resolve is never requested.
 
 We start with the fix released on October 21, 2026 (PHP2Shell, CVE-2026-109618 and
 CVE-2026-109619). Site operators are not named or ranked individually. The report is
@@ -58,7 +64,8 @@ will not connect to your host at all, we make one plain-HTTP attempt, so we can 
   of our requests run at once overall. Each request waits a random 0.1 to 0.5 seconds
   first and has a hard 20-second timeout.
 - **How often (planned):** once a day for about two weeks, then on days 21, 28, 45, 60
-  and 90 after the fix, then we stop.
+  and 90 after the fix, then we stop. Sites in states added later join the same calendar
+  from their first scheduled day.
 - **We identify ourselves.** Every request carries the user agent
   `CarrollPHPStudy/1.0`, the address of this notice
   (`https://github.com/JForden/JForden`) and a contact email, so your security team can
@@ -84,8 +91,14 @@ request to your site. Results are published only as counts of ten or more, never
 and never by the name of a hosting company or software vendor.
 
 Everything stays on a university-controlled machine. We publish counts for groups of
-sites, and we hide any count smaller than ten. **We do not publish per-site results,
-and we do not publish a list of sites that appear vulnerable.**
+sites, and we hide any count smaller than ten. A state is shown on its own only when
+we measure at least 30 of its sites; smaller states are combined with their region.
+**We do not publish per-site results, and we do not publish a list of sites that appear
+vulnerable.**
+
+The counts are shown on a public dashboard at
+https://carrolluniversitycs.github.io/patch-watch/ . It is rebuilt from the same group
+totals and names no site, operator or vendor.
 
 # Who runs it
 
@@ -93,5 +106,6 @@ Jack Forden, Assistant Professor of Computer Science and AI, Carroll University,
 Waukesha, Wisconsin. Email: **jforden@carrollu.edu**. Notice page:
 https://github.com/JForden/JForden
 
-Carroll University's IRB has determined that this is not human-subjects research,
-because it observes government web servers, not people.
+Carroll University's IRB has told us that because this work does not involve human
+subjects, it does not need IRB review. It observes government web servers, not people,
+and we contact no one.

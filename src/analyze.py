@@ -428,6 +428,32 @@ class Suppressor:
         return "<10" if self.hidden(n) else str(n)
 
 
+# A state is reported alone only when its frame has at least this many domains; smaller ones are pooled into their
+# U.S. Census region, fixed here in advance (never chosen by looking at results). A pool that is itself under the
+# minimum falls into one final pool. The counts under SUPPRESS_BELOW rule still applies to every cell.
+MIN_STATE_DOMAINS = 30
+CENSUS_REGION = {
+    **dict.fromkeys("CT ME MA NH RI VT NJ NY PA".split(), "Northeast"),
+    **dict.fromkeys("IL IN MI OH WI IA KS MN MO NE ND SD".split(), "Midwest"),
+    **dict.fromkeys("DE FL GA MD NC SC VA DC WV AL KY MS TN AR LA OK TX".split(), "South"),
+    **dict.fromkeys("AZ CO ID MT NV NM UT WY AK CA HI OR WA".split(), "West"),
+}
+LAST_POOL = "Other small jurisdictions (pooled)"
+
+
+def report_groups(frame_counts: dict[str, int], minimum: int = MIN_STATE_DOMAINS) -> dict[str, str]:
+    """Reporting group for each jurisdiction, from the number of frame domains in it. A jurisdiction with at least
+    `minimum` domains is its own group; the rest join "<Census region> (states under N)", and a pool that is still
+    under `minimum` joins LAST_POOL. Depends only on frame sizes, never on outcomes."""
+    group = {s: (s if n >= minimum else f"{CENSUS_REGION.get(s, 'Other')} (states under {minimum})")
+             for s, n in frame_counts.items()}
+    pooled = Counter()
+    for s, g in group.items():
+        if g != s:
+            pooled[g] += frame_counts[s]
+    return {s: (LAST_POOL if g != s and pooled[g] < minimum else g) for s, g in group.items()}
+
+
 # ------------------------------------------------------------------ report
 def _table(head: list[str], rows: list[list[str]]) -> list[str]:
     return ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)] + \
