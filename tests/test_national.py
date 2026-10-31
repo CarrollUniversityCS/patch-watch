@@ -198,3 +198,30 @@ def test_the_national_task_repeats_until_the_cutoff_so_a_late_wisconsin_run_is_f
     script = (Path(__file__).resolve().parent.parent / "scripts" / "install_national_schedule.ps1").read_text(encoding="utf-8")
     assert "RepetitionInterval (New-TimeSpan -Minutes 30)" in script and "RepetitionDuration (New-TimeSpan -Hours 9)" in script
     assert national_day.ld.LATEST_START == dt.time(19, 0)           # 10:00 + 9 h; the wrapper refuses after this
+
+
+# ------------------------------------------------------------------ Amendment 2 (final pool, event bursts)
+AMENDMENT2_SHA256 = "7934edef49d4252860b1abb8041a2cea416e3a11a108e3f178e2100cb7255670"
+
+
+def test_amendment_two_is_unchanged():
+    """Amendment 2 is pre-registered. Changing it is a new dated amendment, not an edit; update this hash only then."""
+    import hashlib
+    path = Path(__file__).resolve().parent.parent / "docs" / "analysis_plan_amendment_2_reporting_groups.md"
+    text = path.read_bytes().decode("utf-8").replace(chr(13) + chr(10), chr(10))
+    assert hashlib.sha256(text.encode("utf-8")).hexdigest() == AMENDMENT2_SHA256
+
+
+def test_a_final_pool_under_the_minimum_joins_the_largest_regional_pool():
+    from analyze import LAST_POOL, report_groups
+    g = report_groups({"AK": 10, "CT": 5, "SD": 40, "NY": 60, "VT": 12, "ME": 14, "PR": 3})
+    assert LAST_POOL not in g.values()                                   # 13 leftover domains no longer form their own group
+    assert g["AK"] == g["PR"] == g["CT"] == "Northeast (states under 30)"       # they joined the largest regional pool (31)
+    assert g["SD"] == "SD" and g["NY"] == "NY"                           # states reported alone stay alone
+    only = report_groups({"AK": 10, "CT": 5})
+    assert set(only.values()) == {LAST_POOL}                             # nothing larger exists: stays, not estimable
+
+
+def test_wave_one_groups_are_unchanged_by_amendment_two():
+    from analyze import report_groups
+    assert report_groups({"UT": 170, "CT": 169, "SD": 53}) == {"UT": "UT", "CT": "CT", "SD": "SD"}

@@ -401,6 +401,20 @@ def turnbull(intervals: list[tuple[float, float]], iters: int = 5000,
 
 
 # ------------------------------------------------------------------ disclosure
+def _pinned(cells: list[str], total: int, below: int) -> bool:
+    """True when the printed `total` and the visible cells force the value of some "<10" cell. A hidden cell lies in
+    1..below-1; a "§" cell is a visible count of at least `below` whose value is withheld, so it lies in below..rest.
+    Exact, not heuristic: for integers x_i in [l_i, h_i] with sum x = R, the values x_i can take form the interval
+    [max(l_i, R - sum_{j!=i} h_j), min(h_i, R - sum_{j!=i} l_j)] (any x_i in it extends to a full solution by moving the
+    others one unit at a time between their bounds), so x_i is forced exactly when those two ends are equal."""
+    rest = total - sum(int(c) for c in cells if c.isdigit())
+    lo = {i: (1 if c == f"<{below}" else below) for i, c in enumerate(cells) if not c.isdigit()}
+    hi = {i: (below - 1 if c == f"<{below}" else rest) for i, c in enumerate(cells) if not c.isdigit()}
+    return any(cells[i] == f"<{below}"
+               and max(lo[i], rest - sum(hi[j] for j in hi if j != i)) == min(hi[i], rest - sum(lo[j] for j in lo if j != i))
+               for i in lo)
+
+
 class Suppressor:
     def __init__(self, on: bool = True, below: int = SUPPRESS_BELOW):
         self.on, self.below = on, below
@@ -415,7 +429,18 @@ class Suppressor:
             rest = [(v, i) for i, v in enumerate(values) if v > 0 and not self.hidden(v)]
             if rest:
                 out[min(rest)[1]] = "§"
+        while self.on and total_shown and _pinned(out, sum(values), self.below):    # the total still gives a cell away
+            left = [(v, i) for i, v in enumerate(values) if out[i].isdigit() and v > 0]
+            if not left:
+                break
+            out[min(left)[1]] = "§"
         return out
+
+    def total(self, values: list[int], total: int) -> str:
+        """The row total, withheld when it is the sum of `values` and the row would still give a hidden cell away."""
+        if self.on and total == sum(values) and _pinned(self.row(values), total, self.below):
+            return "§"
+        return self.count(total)
 
     def share(self, num: int, den: int) -> str:
         if den == 0:
@@ -444,14 +469,22 @@ LAST_POOL = "Other small jurisdictions (pooled)"
 def report_groups(frame_counts: dict[str, int], minimum: int = MIN_STATE_DOMAINS) -> dict[str, str]:
     """Reporting group for each jurisdiction, from the number of frame domains in it. A jurisdiction with at least
     `minimum` domains is its own group; the rest join "<Census region> (states under N)", and a pool that is still
-    under `minimum` joins LAST_POOL. Depends only on frame sizes, never on outcomes."""
+    under `minimum` joins LAST_POOL; a LAST_POOL under `minimum` joins the largest regional pool (Amendment 2). Depends only
+    on frame sizes, never on outcomes."""
     group = {s: (s if n >= minimum else f"{CENSUS_REGION.get(s, 'Other')} (states under {minimum})")
              for s, n in frame_counts.items()}
     pooled = Counter()
     for s, g in group.items():
         if g != s:
             pooled[g] += frame_counts[s]
-    return {s: (LAST_POOL if g != s and pooled[g] < minimum else g) for s, g in group.items()}
+    out = {s: (LAST_POOL if g != s and pooled[g] < minimum else g) for s, g in group.items()}
+    # Amendment 2: the final pool is itself folded into the largest regional pool when it is under the minimum.
+    last = sum(frame_counts[s] for s, g in out.items() if g == LAST_POOL)
+    regional = {g: n for g, n in pooled.items() if g != LAST_POOL and n >= minimum}
+    if 0 < last < minimum and regional:
+        target = max(regional, key=lambda g: (regional[g], g))
+        out = {s: (target if g == LAST_POOL else g) for s, g in out.items()}
+    return out
 
 
 # ------------------------------------------------------------------ report
@@ -536,7 +569,7 @@ def _rq0(by_point, days, frame, readings, sup) -> list[str]:
     for p in sorted(by_point, key=lambda p: days[p]):
         v = visibility(by_point[p])
         cells = sup.row([v[s] for s in STATES])
-        rows.append([p, f"{days[p]:.1f}", str(v["units"]), *cells, sup.count(v["P"]),
+        rows.append([p, f"{days[p]:.1f}", sup.total([v[s] for s in STATES], v["units"]), *cells, sup.count(v["P"]),
                      sup.count(v["V"]), sup.share(v["V"], v["P"])])
     L += _table(head, rows) + [""]
     live_pts = [p for p in by_point if p != "baseline"]
@@ -552,7 +585,7 @@ def _rq0(by_point, days, frame, readings, sup) -> list[str]:
             if v["units"] < SUPPRESS_BELOW and sup.on:
                 rows.append([name, "<10", *(["§"] * (len(STATES) + 3))])
                 continue
-            rows.append([name, str(v["units"]), *sup.row([v[s] for s in STATES]),
+            rows.append([name, sup.total([v[s] for s in STATES], v["units"]), *sup.row([v[s] for s in STATES]),
                          sup.count(v["P"]), sup.count(v["V"]), sup.share(v["V"], v["P"])])
         L += _table(["stratum", "units", *STATES, "P", "V", "V/P"], rows) + [""]
         off = sum(1 for r in readings if r.point == last and r.off_domain)

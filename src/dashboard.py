@@ -197,7 +197,7 @@ def point(run: dict[str, Any], event: versions.PatchEvent, sup: analyze.Suppress
         "P_n": None if sup.hidden(P) else P,
         "withheld": None if sup.hidden(P) else P - sum(shown.values()),
         "funnel": {
-            "domains": sup.count(units),
+            "domains": sup.total([states[s] for s in BAR_STATES], units),
             "reached": sup.count(units - states["UNREACHED"]),
             "php": sup.count(P),
             "visible": sup.count(visible),

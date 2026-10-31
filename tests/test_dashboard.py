@@ -73,7 +73,7 @@ def test_missing_class_row_raises():
 
 def test_committed_reports_parse():
     runs = dashboard.load_runs()
-    assert runs and all(r["region"] in ("wisconsin", "comparison") for r in runs)
+    assert runs and all(r["region"] in ("wisconsin", "comparison", "national") for r in runs)
     assert not any("MOCK" in r["label"] for r in runs)
 
 

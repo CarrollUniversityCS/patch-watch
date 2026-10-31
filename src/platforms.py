@@ -148,8 +148,9 @@ def public(t: PlatformTable, sup: Suppressor | None = None, name_vendors: bool |
     """Suppressed tables as strings. Platforms under the threshold fold into 'other platforms'."""
     sup = sup or Suppressor()
     named = NAME_VENDORS if name_vendors is None else name_vendors
-    out: dict[str, Any] = {"answering": sup.count(t.answering), "as_of": t.as_of}
-    cells = sup.row([t.by_category.get(c, 0) for c in CATEGORIES])     # primary + complementary
+    counts = [t.by_category.get(c, 0) for c in CATEGORIES]
+    out: dict[str, Any] = {"answering": sup.total(counts, t.answering), "as_of": t.as_of}
+    cells = sup.row(counts)     # primary + complementary
     out["by_category"] = {c: {"n": cells[i], "share": "§" if cells[i] == "§"
                               else sup.share(t.by_category.get(c, 0), t.answering)}
                           for i, c in enumerate(CATEGORIES)}
