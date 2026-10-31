@@ -389,8 +389,11 @@ def national_state(day: dt.date, now: dt.datetime) -> tuple[str, str]:
                             f"errors {r['errors']}, sends {r['sends']}")
     lines = nat_cron_lines(day)
     refusals = [ln for ln in lines if "REFUSING" in ln]
-    if any("RUNNING" in ln for ln in lines) and not any(" exit=" in ln for ln in lines):
+    exits = [ln for ln in lines if " exit=" in ln]
+    if any("RUNNING" in ln for ln in lines) and not exits:
         return "running", "national_day started; no exit line yet"
+    if exits:                                   # the runner exited without writing a run row (preflight, run.lock)
+        return "failed", exits[-1] + (f" (later: {refusals[-1]})" if refusals else "")
     if refusals:
         return "refused", refusals[-1]
     if day > now.date() or (day == now.date() and now.time() < NAT_DUE):

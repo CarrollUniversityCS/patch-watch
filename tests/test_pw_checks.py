@@ -273,3 +273,13 @@ def test_an_unfinished_national_run_with_no_lock_is_a_crash_at_last_chance(box):
 def test_a_national_day_off_the_calendar_reports_nothing(box):
     release(box)
     assert nat_results(pw.check_started(chi(OFF_DAY, 9, 45), last_chance=False)) == []
+
+
+def test_a_runner_that_exits_without_a_run_row_is_a_failure_not_a_missing_log(box):
+    release(box)
+    box.add_run("WI_20261029")
+    box.cron("national_day 2026-10-29T10:00:04: RUNNING wave<=1 NAT_20261029",
+             "national_day 2026-10-29T10:00:06: label=NAT_20261029 exit=1")
+    for res in (pw.check_started(chi(DAY, 10, 15), last_chance=False), pw.check_postrun(chi(DAY, 11, 30))):
+        n = nat_results(res)
+        assert n[0].status == "fail" and "exit=1" in n[0].detail
