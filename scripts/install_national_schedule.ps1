@@ -19,11 +19,16 @@ if (-not (Test-Path $Cmd)) { throw "not found: $Cmd" }
 
 $action   = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$Cmd`"" -WorkingDirectory $Repo
 $trigger  = New-ScheduledTaskTrigger -Daily -At 10:00am
+# Repeat every 30 minutes until 19:00 so a late Wisconsin run (the 18:00 catch-up) is still followed by the national run.
+# Every extra firing is a refusal unless Wisconsin finished and no national run happened today or halted;
+# national_day.py refuses after 19:00 itself.
+$rep = (New-ScheduledTaskTrigger -Once -At 10:00am -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Hours 9)).Repetition
+$trigger.Repetition = $rep
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
             -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
             -ExecutionTimeLimit (New-TimeSpan -Hours 6) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
     -Description "patch-watch: one national-extension snapshot per scheduled day (scripts/national_day.py decides)" -Force | Out-Null
 
-Write-Host "Installed '$TaskName': daily 10:00, refuses until a wave is released."
+Write-Host "Installed '$TaskName': daily 10:00, repeating every 30 min until 19:00; refuses until a wave is released."
 Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo | Format-List NextRunTime, LastRunTime, LastTaskResult

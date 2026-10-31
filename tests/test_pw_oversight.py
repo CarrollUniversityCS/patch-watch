@@ -6,6 +6,7 @@ database: paths point at tmp_path, `ps` and `run` are replaced, and the database
 
 import datetime as dt
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -66,6 +67,8 @@ def ov(box, monkeypatch, tmp_path):                                  # noqa: F81
             c.execute("CREATE TABLE t (x)")
             c.commit()
             c.close()
+        stamp = chi(DAY, 11, 35).timestamp()                    # written on the test's day, not the real one
+        os.utime(p, (stamp, stamp))
         if copy:
             (box.offsite / "backups").mkdir(exist_ok=True)       # scripts/backup_now.py copies into <dest>/backups
             (box.offsite / "backups" / name).write_bytes(p.read_bytes())

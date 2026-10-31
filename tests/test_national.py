@@ -184,3 +184,17 @@ def test_the_national_amendment_is_unchanged():
     path = Path(__file__).resolve().parent.parent / "docs" / "analysis_plan_amendment_national.md"
     text = path.read_bytes().decode("utf-8").replace(chr(13) + chr(10), chr(10))
     assert hashlib.sha256(text.encode("utf-8")).hexdigest() == AMENDMENT_SHA256
+
+
+# ------------------------------------------------------------------ the dashboard and the schedule know the national arm
+def test_the_dashboard_names_the_national_series_and_does_not_present_it_as_an_estimate():
+    root = Path(__file__).resolve().parent.parent / "dashboard"
+    for name in ("template.html", "index.html"):
+        text = (root / name).read_text(encoding="utf-8")
+        assert 'national: "Other states (released in waves; not a national estimate)"' in text, name
+
+
+def test_the_national_task_repeats_until_the_cutoff_so_a_late_wisconsin_run_is_followed():
+    script = (Path(__file__).resolve().parent.parent / "scripts" / "install_national_schedule.ps1").read_text(encoding="utf-8")
+    assert "RepetitionInterval (New-TimeSpan -Minutes 30)" in script and "RepetitionDuration (New-TimeSpan -Hours 9)" in script
+    assert national_day.ld.LATEST_START == dt.time(19, 0)           # 10:00 + 9 h; the wrapper refuses after this
