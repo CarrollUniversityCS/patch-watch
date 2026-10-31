@@ -44,7 +44,8 @@ def box(monkeypatch, tmp_path):
     con.close()
     for name, val in {"DB": db, "LOGS": logs, "CRON_OUT": logs / "cron.out", "ABUSE_FLAG": logs / "abuse.flag",
                       "RUN_LOCK": logs / "run.lock", "REPORTS": reports, "HUB": logs / "hub",
-                      "CHECKS": logs / "hub" / "checks", "HERMES_JOBS": tmp_path / "none.json"}.items():
+                      "CHECKS": logs / "hub" / "checks", "HERMES_JOBS": tmp_path / "none.json",
+                      "NAT_ACTIVE": tmp_path / "national_active_wave.txt", "NAT_NOTICE": logs / "notice_live.txt"}.items():
         monkeypatch.setattr(pw, name, val)
     calls = []
     monkeypatch.setattr(pw, "ps", lambda script, timeout=60: (calls.append(script), (0, ""))[1])
@@ -55,6 +56,7 @@ def box(monkeypatch, tmp_path):
         pass
     b = Box()
     b.calls, b.db, b.logs, b.reports = calls, db, logs, reports
+    b.tmp = tmp_path
 
     def add_run(label, finished=True, kill=None, run_id=None):
         c = sqlite3.connect(db)
@@ -197,3 +199,77 @@ def test_hub_escapes_log_text(box):
     box.cron("live_day 2026-10-29T09:00:01: REFUSING - <script>x</script>")
     page = pw.build_hub().read_text(encoding="utf-8")
     assert "<script>x" not in page and "&lt;script&gt;" in page
+
+
+# ------------------------------------------------------------------ the national arm (silent until a wave is released)
+def release(box, wave="1"):
+    (box.tmp / "national_active_wave.txt").write_text(wave, encoding="utf-8")
+    (box.logs / "notice_live.txt").write_text("2026-10-30 confirmed\n", encoding="utf-8")
+
+
+def nat_results(res):
+    return [r for r in res if r.name.startswith("National")]
+
+
+def test_national_checks_are_silent_until_a_wave_and_the_notice_are_in_place(box):
+    box.add_run("WI_20261029")
+    assert nat_results(pw.check_started(chi(DAY, 18, 0), last_chance=True)) == []
+    (box.tmp / "national_active_wave.txt").write_text("1", encoding="utf-8")            # wave but no notice
+    assert nat_results(pw.check_started(chi(DAY, 18, 0), last_chance=True)) == []
+
+
+def test_a_clean_national_day_is_ok_and_post_run_reads_its_report(box):
+    release(box)
+    box.add_run("WI_20261029")
+    box.add_run("NAT_20261029")
+    (box.reports / "run_R_NAT_20261029.md").write_text("# Run\nNo violations found\n", encoding="utf-8")
+    assert [r.status for r in nat_results(pw.check_started(chi(DAY, 9, 45), last_chance=False))] == ["ok"]
+    post = nat_results(pw.check_postrun(chi(DAY, 11, 30)))
+    assert [r.status for r in post] == ["ok", "ok"] and "safety audit" in post[1].name
+
+
+def test_a_national_report_that_is_not_clean_fails_post_run(box):
+    release(box)
+    box.add_run("WI_20261029")
+    box.add_run("NAT_20261029")
+    post = nat_results(pw.check_postrun(chi(DAY, 11, 30)))
+    assert post[1].status == "fail"
+
+
+def test_a_halted_national_run_fails_and_says_how_to_resume_without_touching_the_schedule(box):
+    release(box)
+    box.add_run("WI_20261029")
+    box.add_run("NAT_20261029", kill="kill switch (overload)")
+    for res in (pw.check_started(chi(DAY, 9, 45), last_chance=False), pw.check_postrun(chi(DAY, 11, 30))):
+        n = nat_results(res)
+        assert n[0].status == "fail" and "re-release" in n[0].detail
+    assert not [c for c in box.calls if "National" in c or "national" in c]
+
+
+def test_a_missed_national_day_is_info_at_0945_and_a_failure_after_the_run_was_due(box):
+    release(box)
+    box.add_run("WI_20261029")
+    assert nat_results(pw.check_started(chi(DAY, 9, 45), last_chance=False))[0].status == "info"
+    assert nat_results(pw.check_postrun(chi(DAY, 11, 30)))[0].status == "fail"
+    assert nat_results(pw.check_started(chi(DAY, 18, 0), last_chance=True))[0].status == "fail"
+
+
+def test_a_national_refusal_while_wisconsin_is_still_pending_is_only_a_warning(box):
+    release(box)
+    box.cron("national_day 2026-10-29T10:00:03: REFUSING - Wisconsin has not completed a clean snapshot today; the primary arm goes first")
+    first = nat_results(pw.check_started(chi(DAY, 10, 30), last_chance=False))
+    assert first[0].status == "warn" and "REFUSING" in first[0].detail
+    assert nat_results(pw.check_started(chi(DAY, 18, 0), last_chance=True))[0].status == "fail"
+
+
+def test_an_unfinished_national_run_with_no_lock_is_a_crash_at_last_chance(box):
+    release(box)
+    box.add_run("WI_20261029")
+    box.add_run("NAT_20261029", finished=False)
+    assert nat_results(pw.check_started(chi(DAY, 9, 45), last_chance=False))[0].status == "warn"
+    assert nat_results(pw.check_started(chi(DAY, 18, 0), last_chance=True))[0].status == "fail"
+
+
+def test_a_national_day_off_the_calendar_reports_nothing(box):
+    release(box)
+    assert nat_results(pw.check_started(chi(OFF_DAY, 9, 45), last_chance=False)) == []

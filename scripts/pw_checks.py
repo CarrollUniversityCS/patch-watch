@@ -74,6 +74,10 @@ CHI = live_day.LOCAL_TZ
 LATEST_START = live_day.LATEST_START
 
 LIVE_TASK = "patch-watch live day"
+NATIONAL_TASK = "patch-watch national day"
+NAT_ACTIVE = ROOT / "data" / "national_active_wave.txt"      # the PI writes 1, 2 or 3 to release a wave
+NAT_NOTICE = LOGS / "notice_live.txt"
+NAT_DUE = dt.time(10, 0)                                     # the national task's first firing; it repeats until 19:00
 EXPECTED_ASN = "AS40379"
 MIN_FREE_GB = 2
 CHECK_NAMES = {"prerun": "08:30 pre-run", "optout": "08:45 opt-outs", "started": "09:45 did it start?",
@@ -245,6 +249,12 @@ def check_prerun(now: dt.datetime) -> list[Result]:
                       f"{backups[-1].name}" if backups else "no backups/study_*.db yet"))
 
     out.append(live_task_result(today, snap))
+    if nat_released():
+        nt = next((x for x in tasks() if x["name"] == NATIONAL_TASK), None)
+        out.append(Result("National task", "fail" if not nt or nt["state"] == "Disabled" else "ok",
+                          f"'{NATIONAL_TASK}' is missing - run scripts/install_national_schedule.ps1" if not nt else
+                          f"{nt['state']}, next {nt['next'] or '-'}" if nt["state"] != "Disabled" else
+                          "Disabled - only Jack re-enables"))
     return out
 
 
@@ -345,7 +355,96 @@ def check_optout(now: dt.datetime) -> list[Result]:
     return out
 
 
+def nat_released() -> int:
+    """The released wave (1 to 3), or 0 when none is released or the notice is not confirmed: the national task then refuses."""
+    try:
+        wave = int(NAT_ACTIVE.read_text(encoding="utf-8").strip())
+        notice = NAT_NOTICE.read_text(encoding="utf-8", errors="ignore").strip()
+    except (OSError, ValueError):
+        return 0
+    return wave if wave in (1, 2, 3) and notice else 0
+
+
+def nat_runs(day: dt.date) -> list[sqlite3.Row]:
+    return [r for r in db_runs(f"NAT_{day:%Y%m%d}") if not is_mock(r)]
+
+
+def nat_cron_lines(day: dt.date) -> list[str]:
+    if not CRON_OUT.exists():
+        return []
+    prefix = f"national_day {day.isoformat()}T"
+    return [ln.rstrip() for ln in CRON_OUT.read_text(encoding="utf-8", errors="replace").splitlines() if ln.startswith(prefix)]
+
+
+def national_state(day: dt.date, now: dt.datetime) -> tuple[str, str]:
+    """(state, detail) of one snapshot day's national run, like day_state for Wisconsin."""
+    rows = nat_runs(day)
+    if rows:
+        r = rows[-1]
+        if r["kill_switch"]:
+            return "halted", f"{r['run_id']}: {r['kill_switch']}"
+        if not r["finished_at_utc"]:
+            return "running", f"{r['run_id']} has no finish time yet"
+        return "captured", (f"{r['run_id']}: attempted {r['attempted']}, responded {r['responded']}, "
+                            f"errors {r['errors']}, sends {r['sends']}")
+    lines = nat_cron_lines(day)
+    refusals = [ln for ln in lines if "REFUSING" in ln]
+    if any("RUNNING" in ln for ln in lines) and not any(" exit=" in ln for ln in lines):
+        return "running", "national_day started; no exit line yet"
+    if refusals:
+        return "refused", refusals[-1]
+    if day > now.date() or (day == now.date() and now.time() < NAT_DUE):
+        return "planned", ""
+    if day == now.date() and now.time() < LATEST_START:
+        return "pending", "no national run and no cron.out line yet; the task repeats every 30 min until 19:00"
+    return "missed", "no national run row and no cron.out line"
+
+
+def check_national(now: dt.datetime, last_chance: bool = False, post_run: bool = False) -> list[Result]:
+    """The national arm's did-it-run check. Silent (no rows) until a wave is released, so nothing changes for a
+    Wisconsin-only day. Report-only: a national halt is already remembered by national_day.py, which refuses until
+    the wave is re-released, so this never touches the schedule."""
+    today = now.date()
+    if today not in live_day.SNAPSHOT_DAYS or not nat_released():
+        return []
+    state, detail = national_state(today, now)
+    name = "National run today"
+    if state == "captured":
+        if not post_run:
+            return [Result(name, "ok", detail)]
+        r = nat_runs(today)[-1]
+        report = REPORTS / f"run_{r['run_id']}.md"
+        text = report.read_text(encoding="utf-8", errors="replace") if report.exists() else ""
+        clean = "No violations found" in text and not (REPORTS / f"ALERT_{r['run_id']}.md").exists()
+        exits = [ln for ln in nat_cron_lines(today) if f"label=NAT_{today:%Y%m%d} exit=" in ln]
+        out = [Result(name, "ok", detail),
+               Result("National run safety audit", "ok" if clean else "fail",
+                      "No violations found" if clean else f"{report.name} missing, not clean, or an ALERT report exists")]
+        if exits:
+            out.append(Result("National exit line", "ok" if exits[-1].endswith("exit=0") else "fail", exits[-1]))
+        return out
+    if state == "halted":
+        return [Result(name, "fail", f"HALT - {detail}. national_day.py refuses until you re-release the wave "
+                                     f"(write the wave number to data/national_active_wave.txt again).")]
+    if state == "running":
+        if last_chance and not RUN_LOCK.exists():
+            return [Result(name, "fail", f"unfinished with no run.lock - likely a crash; do not re-run ({detail})")]
+        return [Result(name, "warn", f"in progress: {detail}")]
+    if state == "planned":
+        return [Result(name, "info", "not due yet (first firing 10:00)")]
+    if state == "refused":
+        waiting = "Wisconsin has not completed" in detail and now.time() < LATEST_START and not last_chance
+        return [Result(name, "warn" if waiting else "fail", f"national_day refused: {detail}")]
+    if state == "pending" and not (last_chance or post_run):
+        return [Result(name, "info", detail)]
+    return [Result(name, "fail", f"{state}: {detail}")]
+
+
 def check_started(now: dt.datetime, last_chance: bool) -> list[Result]:
+    return _check_started_wi(now, last_chance) + check_national(now, last_chance)
+
+
+def _check_started_wi(now: dt.datetime, last_chance: bool) -> list[Result]:
     today = now.date()
     if today not in live_day.SNAPSHOT_DAYS:
         return [Result("Snapshot day", "info", "no - nothing should run today")]
@@ -388,6 +487,10 @@ def catch_up(now: dt.datetime) -> Result:
 
 
 def check_postrun(now: dt.datetime) -> list[Result]:
+    return _check_postrun_wi(now) + check_national(now, post_run=True)
+
+
+def _check_postrun_wi(now: dt.datetime) -> list[Result]:
     today = now.date()
     if today not in live_day.SNAPSHOT_DAYS:
         return [Result("Snapshot day", "info", "no - nothing to check")]
