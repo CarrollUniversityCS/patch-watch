@@ -35,6 +35,7 @@ import classify as classify_mod
 import config
 import db
 import detect
+import disclosure
 import hosting
 import support_status
 import versions
@@ -559,34 +560,159 @@ def build_report(conn: sqlite3.Connection, frame: Frame, event: versions.PatchEv
     L += _platforms(conn, frame, runs, sup)
     L += _election(conn, frame, runs, sup)
     L += _historical(conn, frame, sup)
-    return "\n".join(L) + "\n"
+    text = "\n".join(L) + "\n"
+    if sup.on:
+        leaked = audit_rq0_text(text)
+        if leaked:
+            raise RuntimeError("the printed RQ0 tables let a hidden cell be recovered: " + "; ".join(leaked))
+    return text
+
+
+_RQ_COLS = ("units", *STATES, "P", "V")
+
+
+def _kind(token: str, value: int, below: int) -> str:
+    """How a reader sees a printed cell: exact, a count under `below`, or a withheld count."""
+    if token.isdigit():
+        return "show"
+    if token == f"<{below}":
+        return "small"
+    return "big" if value >= below else "any"
+
+
+def _rc(name: str) -> tuple[str, str]:
+    row, col = name.rsplit("|", 1)
+    return row, col
+
+
+def _rq0_equations(strata: list[str]) -> list[disclosure.Equation]:
+    """What a reader can add up: within every row units, P and V are sums of the state counts, and the stratum rows
+    add up to the point row in every column."""
+    names = ["point", *[f"s:{k}" for k in strata]]
+    eqs: list[disclosure.Equation] = []
+    for r in names:
+        eqs.append({f"{r}|units": 1, **{f"{r}|{s}": -1 for s in STATES}})
+        eqs.append({f"{r}|P": 1, **{f"{r}|{s}": -1 for s in P_STATES}})
+        eqs.append({f"{r}|V": 1, **{f"{r}|{s}": -1 for s in V_STATES}})
+    for c in _RQ_COLS:
+        eqs.append({f"point|{c}": 1, **{f"s:{k}|{c}": -1 for k in strata}})
+    return eqs
+
+
+def audit_rq0_text(text: str) -> list[str]:
+    """Read every RQ0 block of a printed report the way an outsider would and return the "<10" cells that the printed
+    numbers force. An empty list means no hidden cell in those tables can be recovered."""
+    forced: list[str] = []
+    for k, part in enumerate(text.split("### RQ0")[1:], start=1):
+        tabs: list[list[list[str]]] = []
+        cur: list[list[str]] = []
+        for ln in part.split("### RQ1")[0].splitlines():
+            if ln.startswith("|"):
+                cur.append([c.strip() for c in ln.strip("|").split("|")])
+            elif cur:
+                tabs.append(cur)
+                cur = []
+        if cur:
+            tabs.append(cur)
+        live = [r for r in tabs[0][2:] if r[0] != "baseline"] if tabs else []
+        if len(tabs) < 2 or not live:
+            continue
+        n = len(_RQ_COLS)
+        rows = {"point": live[-1][2:2 + n], **{f"s:{r[0]}": r[1:1 + n] for r in tabs[1][2:]}}
+        dom: disclosure.Domain = {}
+        for r, toks in rows.items():
+            anyrow = r != "point" and toks[0] == "<10"
+            for c, tok in zip(_RQ_COLS, toks):
+                dom[f"{r}|{c}"] = ([int(tok)] * 2 if tok.isdigit() else [1, SUPPRESS_BELOW - 1] if tok == "<10"
+                                   else [0, SUPPRESS_BELOW - 1] if anyrow else [SUPPRESS_BELOW, disclosure.BIG])
+        small = [f"{r}|{c}" for r, toks in rows.items() for c, tok in zip(_RQ_COLS, toks) if tok == "<10"]
+        eqs = _rq0_equations([r[2:] for r in rows if r != "point"])
+        forced += [f"RQ0 block {k}: {name}" for name in disclosure.classify(dom, eqs, small)[0]]
+    return forced
+
+
+def _joint_rq0(point: dict[str, int], strata: dict[str, dict[str, int]], sup: "Suppressor"):
+    """Print the latest-point row and its stratum rows so that the two tables TOGETHER leave no "<10" cell recoverable.
+
+    Each row is first suppressed on its own. The strata partition the point, so each column of the stratum table adds up
+    to the point row, and within a row units, P and V are sums of the state counts. Those equations go to
+    disclosure.pinned; while any "<10" cell is forced, the smallest visible count that shares an equation with it is
+    withheld ("§") and the audit runs again. The choice depends on the counts only. Returns the printed cells (units,
+    STATES, P, V, V/P) for the point row and for each stratum."""
+    below = sup.below
+    rows: dict[str, dict[str, tuple[int, str]]] = {}
+    named = {"point": point, **{f"s:{k}": v for k, v in strata.items()}}
+    for rname, v in named.items():
+        if rname != "point" and v["units"] < below:
+            toks = {c: ("<10" if c == "units" else "§") for c in _RQ_COLS}
+        else:
+            toks = {"units": sup.total([v[s] for s in STATES], v["units"]), "P": sup.count(v["P"]),
+                    "V": sup.count(v["V"]), **dict(zip(STATES, sup.row([v[s] for s in STATES])))}
+        rows[rname] = {c: (v[c], _kind(toks[c], v[c], below)) for c in _RQ_COLS}
+    dom: disclosure.Domain = {}
+    for r, cells in rows.items():
+        for c, (val, kind) in cells.items():
+            dom[f"{r}|{c}"] = {"show": [val, val], "small": [1, below - 1], "big": [below, disclosure.BIG],
+                               "any": [0, below - 1]}[kind][:]
+    eqs = _rq0_equations(list(strata))
+    while True:
+        small = [n for n in dom if rows[_rc(n)[0]][_rc(n)[1]][1] == "small"]
+        forced = disclosure.pinned(dom, eqs, small, hint={f"{r}|{c}": val for r, cs in rows.items() for c, (val, _) in cs.items()})
+        if not forced:
+            break
+        seen, front, cand = set(forced), set(forced), []
+        while front and not cand:                     # widen one equation at a time until a visible count is found
+            front = {n for eq in eqs if any(f in eq for f in front) for n in eq} - seen
+            seen |= front
+            cand = sorted((rows[_rc(n)[0]][_rc(n)[1]][0], n) for n in front
+                          if rows[_rc(n)[0]][_rc(n)[1]][1] == "show" and rows[_rc(n)[0]][_rc(n)[1]][0] > 0)
+        if not cand:
+            raise RuntimeError("joint suppression cannot hide a forced cell: " + ", ".join(sorted(forced)))
+        r, c = _rc(cand[0][1])
+        rows[r][c] = (rows[r][c][0], "big")
+        dom[cand[0][1]] = [below, disclosure.BIG]
+    out: dict[str, list[str]] = {}
+    for r, cells in rows.items():
+        t = {c: (str(val) if kind == "show" else "<10" if kind == "small" else "§") for c, (val, kind) in cells.items()}
+        shown = cells["V"][1] == "show" and cells["P"][1] == "show"
+        share = sup.share(cells["V"][0], cells["P"][0]) if shown else "§"
+        out[r] = [t[c] for c in _RQ_COLS] + [share]
+    return out["point"], {k: out[f"s:{k}"] for k in strata}
 
 
 def _rq0(by_point, days, frame, readings, sup) -> list[str]:
     L = ["### RQ0 - measurability (entities)", ""]
     head = ["point", "day", "units", *STATES, "P", "V", "V/P"]
+    live_pts = [p for p in by_point if p != "baseline"]
+    last = max(live_pts, key=lambda p: days[p]) if live_pts else None
+    strat: dict[str, dict[str, int]] = {}
+    joint = None
+    if last is not None:
+        grouped: dict[str, dict[str, str]] = defaultdict(dict)
+        for u, s in by_point[last].items():
+            grouped[frame.entity_stratum.get(u, "unknown")][u] = s
+        strat = {name: visibility(grouped[name]) for name in sorted(grouped)}
+        if sup.on and strat:
+            joint = _joint_rq0(visibility(by_point[last]), strat, sup)
     rows = []
     for p in sorted(by_point, key=lambda p: days[p]):
+        if joint is not None and p == last:
+            rows.append([p, f"{days[p]:.1f}", *joint[0]])
+            continue
         v = visibility(by_point[p])
         cells = sup.row([v[s] for s in STATES])
         rows.append([p, f"{days[p]:.1f}", sup.total([v[s] for s in STATES], v["units"]), *cells, sup.count(v["P"]),
                      sup.count(v["V"]), sup.share(v["V"], v["P"])])
     L += _table(head, rows) + [""]
-    live_pts = [p for p in by_point if p != "baseline"]
-    if live_pts:
-        last = max(live_pts, key=lambda p: days[p])
+    if last is not None:
         L += [f"By stratum at the latest live point (`{last}`):", ""]
-        strat: dict[str, dict[str, str]] = defaultdict(dict)
-        for u, s in by_point[last].items():
-            strat[frame.entity_stratum.get(u, "unknown")][u] = s
         rows = []
-        for name in sorted(strat):
-            v = visibility(strat[name])
-            if v["units"] < SUPPRESS_BELOW and sup.on:
-                rows.append([name, "<10", *(["§"] * (len(STATES) + 3))])
-                continue
-            rows.append([name, sup.total([v[s] for s in STATES], v["units"]), *sup.row([v[s] for s in STATES]),
-                         sup.count(v["P"]), sup.count(v["V"]), sup.share(v["V"], v["P"])])
+        for name, v in strat.items():
+            if joint is not None:
+                rows.append([name, *joint[1][name]])
+            else:
+                rows.append([name, sup.total([v[s] for s in STATES], v["units"]), *sup.row([v[s] for s in STATES]),
+                             sup.count(v["P"]), sup.count(v["V"]), sup.share(v["V"], v["P"])])
         L += _table(["stratum", "units", *STATES, "P", "V", "V/P"], rows) + [""]
         off = sum(1 for r in readings if r.point == last and r.off_domain)
         cert = sum(1 for r in readings if r.point == last and r.cert_error)

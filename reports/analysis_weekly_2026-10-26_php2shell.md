@@ -6,6 +6,7 @@
 - archived baseline: {"available": true, "domains_asked": 3, "domains_with_pre_cutoff_capture": 0, "captures_on_or_after_cutoff": 0, "cutoff": "2026-10-17T00:00:00Z"}
 - tribal nations' domains are not measured (PI decision D1); excluded: {"MI": 13, "WI": 10, "MN": 10, "IA": 2}
 - disclosure: counts 1-9 shown as <10, complementary suppression marked §
+- correction 2026-10-31: the RQ0 tables (both regions) were reprinted with joint suppression because the originally printed tables let hidden counts be recovered from the margins; every other section is the original 2026-10-26 text
 - vendors, ASNs and hosting providers are never named
 - provenance: code `2873751` (src/ MODIFIED since commit); frame sha256 `831406213ad8be3b`; ASN table sha256 `not loaded`
 
@@ -15,22 +16,22 @@
 
 | point | day | units | EXPOSED | EOL | AMBIGUOUS | PATCHED | OPAQUE | NO_PHP | UNREACHED | P | V | V/P |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| R20261024T140522Z_CMP_20261024 | 3.0 | 1821 | <10 | <10 | 0 | <10 | 189 | 288 | 1323 | 210 | 16 | 8% |
+| R20261024T140522Z_CMP_20261024 | 3.0 | 1821 | <10 | <10 | 0 | <10 | 189 | 288 | 1323 | 210 | § | § |
 
 By stratum at the latest live point (`R20261024T140522Z_CMP_20261024`):
 
 | stratum | units | EXPOSED | EOL | AMBIGUOUS | PATCHED | OPAQUE | NO_PHP | UNREACHED | P | V | V/P |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | City | 576 | <10 | <10 | 0 | <10 | 51 | 106 | 414 | 56 | <10 | § |
-| County | 301 | <10 | 0 | 0 | <10 | 40 | 47 | 210 | 44 | <10 | § |
-| Election office | 171 | <10 | 0 | 0 | 0 | § | 19 | 137 | 15 | <10 | § |
+| County | 301 | <10 | 0 | 0 | <10 | § | 47 | 210 | 44 | <10 | § |
+| Election office | § | <10 | 0 | 0 | 0 | § | § | § | § | <10 | § |
 | Interstate | <10 | § | § | § | § | § | § | § | § | § | § |
-| Municipal department/other | 44 | 0 | 0 | 0 | 0 | <10 | <10 | 37 | <10 | 0 | § |
+| Municipal department/other | 44 | 0 | 0 | 0 | 0 | <10 | <10 | § | <10 | 0 | § |
 | School district | <10 | § | § | § | § | § | § | § | § | § | § |
-| Special district | 77 | 0 | 0 | 0 | <10 | <10 | 13 | 58 | <10 | <10 | § |
+| Special district | § | 0 | 0 | 0 | <10 | <10 | § | § | <10 | <10 | § |
 | State | 40 | 0 | 0 | 0 | 0 | 0 | <10 | § | 0 | 0 | – |
 | Town | 437 | <10 | <10 | 0 | <10 | 65 | 54 | 308 | 75 | <10 | § |
-| Village | 169 | 0 | 0 | 0 | 0 | 13 | 35 | 121 | 13 | 0 | 0% |
+| Village | 169 | 0 | 0 | 0 | 0 | § | § | 121 | § | 0 | § |
 
 Domains at `R20261024T140522Z_CMP_20261024` redirecting off-domain (front door only classified): 49; with certificate errors: 21.
 
@@ -79,19 +80,19 @@ PHP-evidence entities at `R20261024T140522Z_CMP_20261024`: 210.
 | point | day | units | EXPOSED | EOL | AMBIGUOUS | PATCHED | OPAQUE | NO_PHP | UNREACHED | P | V | V/P |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | R20261024T140014Z_WI_20261024 | 3.0 | 778 | <10 | § | 0 | 27 | 153 | 433 | 151 | 194 | 29 | 15% |
-| R20261026T215239Z_WI_20261026 | 5.3 | 778 | 0 | 10 | 0 | 30 | 149 | 434 | 155 | 189 | 30 | 16% |
+| R20261026T215239Z_WI_20261026 | 5.3 | 778 | 0 | § | 0 | 30 | 149 | 434 | 155 | 189 | 30 | 16% |
 
 By stratum at the latest live point (`R20261026T215239Z_WI_20261026`):
 
 | stratum | units | EXPOSED | EOL | AMBIGUOUS | PATCHED | OPAQUE | NO_PHP | UNREACHED | P | V | V/P |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | City | 116 | 0 | 0 | 0 | <10 | § | 56 | 35 | 25 | <10 | § |
-| County | 56 | 0 | 0 | 0 | <10 | § | 29 | 16 | 11 | <10 | § |
-| Election office | 50 | 0 | 0 | 0 | <10 | 13 | 23 | § | 16 | <10 | § |
-| Municipal department/other | 15 | 0 | 0 | 0 | <10 | 0 | <10 | <10 | <10 | <10 | § |
+| County | 56 | 0 | 0 | 0 | <10 | § | 29 | § | § | <10 | § |
+| Election office | 50 | 0 | 0 | 0 | <10 | § | 23 | § | § | <10 | § |
+| Municipal department/other | § | 0 | 0 | 0 | <10 | 0 | <10 | <10 | <10 | <10 | § |
 | Special district | 20 | 0 | 0 | 0 | 0 | <10 | <10 | <10 | <10 | 0 | § |
-| State | 10 | 0 | 0 | 0 | 0 | <10 | <10 | <10 | <10 | 0 | § |
-| Town | 330 | 0 | <10 | 0 | § | 70 | 191 | 44 | 95 | 17 | 18% |
+| State | § | 0 | 0 | 0 | 0 | <10 | <10 | <10 | <10 | 0 | § |
+| Town | 330 | 0 | <10 | 0 | § | 70 | 191 | 44 | 95 | § | § |
 | Village | 181 | 0 | <10 | 0 | <10 | 32 | 110 | 33 | 38 | <10 | § |
 
 Domains at `R20261026T215239Z_WI_20261026` redirecting off-domain (front door only classified): 59; with certificate errors: 33.
