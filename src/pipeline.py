@@ -41,6 +41,7 @@ import classify as classify_mod
 import config
 import db
 import detect
+import console_status
 import fetch
 
 
@@ -180,7 +181,8 @@ async def capture(conn: db.sqlite3.Connection, *, sample_rows: list[dict[str, st
                   mock: bool = False,
                   timeouts: tuple[float, float] | None = None,
                   region: str | None = None,
-                  order_seed: int | None = None) -> dict[str, Any]:
+                  order_seed: int | None = None,
+                  progress: Any = None) -> dict[str, Any]:
     """Fetch, classify, store, diff. One snapshot (of one region, when given)."""
     order_seed = secrets.randbits(32) if order_seed is None else int(order_seed)
     domains = fetch_order([r["domain"] for r in sample_rows], order_seed)
@@ -213,6 +215,10 @@ async def capture(conn: db.sqlite3.Connection, *, sample_rows: list[dict[str, st
         "notes": "mock loopback run" if test_hosts else "live run",
     })
 
+    if progress is not None:
+        progress.kill = kill
+        crawler.on_domain_done = progress.observation_done
+        progress.start()
     observations = await crawler.fetch_many(domains)
 
     # The ledger lands in the database BEFORE anything else happens, and is
@@ -442,8 +448,11 @@ def run_snapshot(*, sample_path: Path | str | None = None, db_path: Path | str |
                  blocklist_path: Path | str | None = None, snapshot_label: str = "",
                  run_id: str | None = None, limit: int | None = None,
                  mock: bool = False, mock_rotate: int = 0, quiet: bool = False,
-                 region: str | None = None, order_seed: int | None = None) -> dict[str, Any]:
-    """Synchronous entry point used by scripts/run_snapshot.py and the cron snippet."""
+                 region: str | None = None, order_seed: int | None = None,
+                 progress: bool = False, progress_stream: Any = None) -> dict[str, Any]:
+    """Synchronous entry point used by scripts/run_snapshot.py and the cron snippet.
+
+    `progress=True` writes a live status line to the console window (counts only); see src/console_status.py."""
     attach_logging()
     sample_path = Path(sample_path or (config.DATA_DIR / "pilot_sample.csv"))
     db_path = Path(db_path or config.DB_PATH)
@@ -484,6 +493,12 @@ def run_snapshot(*, sample_path: Path | str | None = None, db_path: Path | str |
             next(cycle)
         url_for = lambda dom: stack.url_for(next(cycle))  # noqa: E731 - one-liner on purpose
 
+    status = None
+    if progress:
+        status = console_status.ConsoleStatus(
+            f"{region or 'run'} {snapshot_label or 'adhoc'}", len(sample_rows),
+            progress_stream if progress_stream is not None else console_status.open_console())
+
     # Mock runs touch only loopback, so they need no lock and may run beside a live one.
     with (RunLock() if not mock else contextlib.nullcontext()):
         try:
@@ -496,16 +511,22 @@ def run_snapshot(*, sample_path: Path | str | None = None, db_path: Path | str |
                     snapshot_label=snapshot_label or "adhoc", blocklist=blocklist,
                     url_for=url_for, test_hosts=test_hosts or (), mock=mock,
                     timeouts=(1.0, 3.0) if mock else None, region=region,
-                    order_seed=order_seed))
+                    order_seed=order_seed, progress=status))
                 summary["ledger_csv"] = str(export_ledger(
                     summary["ledger"].rows,
                     config.DATA_DIR / f"ledger_{summary['run_id']}.csv"))
                 summary["run_log"] = str(write_run_log(summary))
+            except BaseException:
+                if status is not None:
+                    status.finish("Stopped before the end - see logs\\cron.out")
+                raise
             finally:
                 conn.close()
         finally:
             if stack is not None:
                 stack.stop()
+    if status is not None:
+        status.finish("Finished")
 
     if not quiet:
         print(json.dumps({k: v for k, v in summary.items()
@@ -549,7 +570,7 @@ def main(argv: list[str] | None = None) -> int:
     s = run_snapshot(sample_path=args.sample, db_path=args.db, blocklist_path=args.blocklist,
                      snapshot_label=args.label, run_id=args.run_id, limit=args.limit,
                      mock=args.mock, mock_rotate=args.mock_rotate, region=args.region,
-                     order_seed=args.order_seed)
+                     order_seed=args.order_seed, progress=True)
     return 2 if (s["kill_switch"] or s["audit_problems"]) else 0
 
 

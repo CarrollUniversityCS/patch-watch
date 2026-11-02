@@ -16,6 +16,15 @@ rem                                        scripts\install_schedule.ps1)
 rem         live_day.cmd 20261029        (optional; must equal today's Chicago date)
 rem ─────────────────────────────────────────────────────────────────────────────────────
 setlocal
+title patch-watch LIVE snapshot (Wisconsin) - do not close
+echo =====================================================================
+echo  patch-watch: daily live study snapshot, Wisconsin. Started %DATE% %TIME%
+echo  This window can stay quiet for several minutes while a run works.
+echo  Do NOT close it or press Ctrl+C: that stops the run and loses its record.
+echo  Full log: logs\cron.out in the patch-watch folder.
+echo  If nothing is due, it closes again within a few seconds.
+echo =====================================================================
+echo.
 set "PATCHWATCH_GATE_A=APPROVED"
 rem ---------------------------------------------------------------------------
 rem PI decision 2026-10-26: the COMPARISON arm is HELD after the 2026-10-24 halt
@@ -31,4 +40,6 @@ rem ---------------------------------------------------------------------------
 set "PATCHWATCH_REGIONS=wisconsin"
 cd /d "%~dp0.." || exit /b 9
 ".venv\Scripts\python.exe" -X utf8 "scripts\live_day.py" %1 >> "logs\cron.out" 2>&1
-exit /b %errorlevel%
+set "PW_RC=%errorlevel%"
+echo Finished at %TIME% with exit code %PW_RC%. This window closes now.
+exit /b %PW_RC%

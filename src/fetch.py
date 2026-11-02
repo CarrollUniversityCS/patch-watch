@@ -468,6 +468,8 @@ class Crawler:
             config.CONNECT_TIMEOUT_S, config.TOTAL_TIMEOUT_S)
         self.resolved_cache: dict[str, str] = {}
         self._stopped = asyncio.Event()
+        # Optional: called once per domain when its fetch ends (console progress). Never part of the rules.
+        self.on_domain_done: Callable[[Observation | None], None] | None = None
 
     # -- helpers ------------------------------------------------------------
     def _request_headers(self) -> dict[str, str]:
@@ -723,7 +725,19 @@ class Crawler:
         ledger to account for it. A domain that blows up comes back as an
         observation carrying the exception type instead.
         """
-        results = await asyncio.gather(*(self.fetch(d) for d in domains),
+        async def counted(domain: str) -> Observation:
+            res: Observation | None = None
+            try:
+                res = await self.fetch(domain)
+                return res
+            finally:
+                if self.on_domain_done is not None:
+                    try:
+                        self.on_domain_done(res)
+                    except Exception:  # progress display must never affect a run
+                        pass
+
+        results = await asyncio.gather(*(counted(d) for d in domains),
                                        return_exceptions=True)
         out: list[Observation] = []
         for domain, res in zip(domains, results):

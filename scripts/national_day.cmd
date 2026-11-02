@@ -10,7 +10,18 @@ rem The PI releases a wave by writing 1, 2 or 3 into data\national_active_wave.t
 rem Output goes to logs\cron.out with the other scheduled runs.
 rem ─────────────────────────────────────────────────────────────────────────────────────
 setlocal
+title patch-watch LIVE snapshot (national) - do not close
+echo =====================================================================
+echo  patch-watch: national extension check, runs only after Wisconsin. Started %DATE% %TIME%
+echo  This window can stay quiet for several minutes while a run works.
+echo  Do NOT close it or press Ctrl+C: that stops the run and loses its record.
+echo  Full log: logs\cron.out in the patch-watch folder.
+echo  If nothing is due, it closes again within a few seconds.
+echo =====================================================================
+echo.
 set "PATCHWATCH_GATE_A=APPROVED"
 cd /d "%~dp0.." || exit /b 9
 ".venv\Scripts\python.exe" -X utf8 "scripts\national_day.py" >> "logs\cron.out" 2>&1
-exit /b %errorlevel%
+set "PW_RC=%errorlevel%"
+echo Finished at %TIME% with exit code %PW_RC%. This window closes now.
+exit /b %PW_RC%
