@@ -201,6 +201,119 @@ def test_hub_escapes_log_text(box):
     assert "<script>x" not in page and "&lt;script&gt;" in page
 
 
+@pytest.fixture
+def kevwatch_box(monkeypatch, tmp_path):
+    folder = tmp_path / "kevwatch"
+    folder.mkdir()
+    toasts = []
+    monkeypatch.setattr(pw, "KEVWATCH", folder)
+    monkeypatch.setattr(pw, "notify", lambda title, body: toasts.append((title, body)))
+    return folder, toasts
+
+
+def _write_kevwatch_status(folder, now, *, failures=0, success_delta=dt.timedelta(hours=1),
+                           candidates=None, exit_code=0, near_misses=None):
+    success = (now.astimezone(dt.timezone.utc) - success_delta).isoformat().replace("+00:00", "Z")
+    first_seen = (now.astimezone(dt.timezone.utc) - dt.timedelta(days=1)).isoformat().replace("+00:00", "Z")
+    state = {
+        "last_success_utc": success,
+        "catalog_version": "2026.10.30",
+        "consecutive_failures": failures,
+        "candidates": candidates or {},
+    }
+    last_run = {
+        "exit_code": exit_code,
+        "near_misses": near_misses or [],
+        "near_miss_names": ["PHP / PHPMailer"] if near_misses else [],
+    }
+    (folder / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    (folder / "last_run.json").write_text(json.dumps(last_run), encoding="utf-8")
+    return first_seen
+
+
+def test_kevwatch_no_files_warns(kevwatch_box):
+    folder, _ = kevwatch_box
+    results = pw.check_kevwatch(chi(DAY, 9))
+    assert results == [pw.Result("KEV watcher", "warn", "not installed yet (no state)")]
+
+
+def test_kevwatch_fresh_success_is_ok(kevwatch_box):
+    folder, _ = kevwatch_box
+    now = chi(DAY, 9)
+    _write_kevwatch_status(folder, now)
+    results = pw.check_kevwatch(now)
+    assert results[0].status == "ok"
+    assert "catalog 2026.10.30" in results[0].detail
+
+
+def test_kevwatch_stale_success_fails(kevwatch_box):
+    folder, _ = kevwatch_box
+    now = chi(DAY, 9)
+    _write_kevwatch_status(folder, now, success_delta=dt.timedelta(hours=37))
+    results = pw.check_kevwatch(now)
+    assert results[0].status == "fail" and "stale" in results[0].detail
+
+
+def test_kevwatch_three_feed_failures_fail(kevwatch_box):
+    folder, _ = kevwatch_box
+    now = chi(DAY, 9)
+    _write_kevwatch_status(folder, now, failures=3)
+    results = pw.check_kevwatch(now)
+    assert results[0].status == "fail" and "3 consecutive" in results[0].detail
+
+
+def test_kevwatch_candidate_warns_and_toasts_only_once(kevwatch_box):
+    folder, toasts = kevwatch_box
+    now = chi(DAY, 9)
+    _write_kevwatch_status(
+        folder,
+        now,
+        candidates={
+            "CVE-2026-109619": {
+                "first_seen_utc": "2026-10-28T15:00:00Z",
+                "product_key": "php",
+                "product": "PHP",
+                "due": "2026-10-29",
+                "packet_dir": "docs/proposed/events/2026-10-26_CVE-2026-109619",
+                "notified": False,
+            }
+        },
+    )
+    state_before = (folder / "state.json").read_bytes()
+    results = pw.check_kevwatch(now)
+    candidate_result = next(result for result in results if result.name == "KEV candidate CVE-2026-109619")
+    assert candidate_result.status == "warn"
+    assert candidate_result.detail == (
+        "php, due 2026-10-29: see docs/proposed/events/2026-10-26_CVE-2026-109619"
+    )
+    assert toasts == [("patch-watch: new KEV candidate", "CVE-2026-109619 PHP")]
+    assert json.loads((folder / "notified.json").read_text(encoding="utf-8")) == ["CVE-2026-109619"]
+    assert (folder / "state.json").read_bytes() == state_before
+
+    pw.check_kevwatch(now)
+    assert len(toasts) == 1
+
+
+def test_kevwatch_reports_last_run_exit_and_near_miss_names(kevwatch_box):
+    folder, _ = kevwatch_box
+    now = chi(DAY, 9)
+    _write_kevwatch_status(folder, now, exit_code=6, near_misses=["CVE-2026-1"])
+    results = pw.check_kevwatch(now)
+    assert results[0].status == "fail" and "last run exited 6" in results[0].detail
+    assert results[1] == pw.Result("KEV near misses", "info", "PHP / PHPMailer")
+
+
+def test_pw_checks_does_not_import_kevwatch():
+    text = (ROOT / "scripts" / "pw_checks.py").read_text(encoding="utf-8")
+    assert "import kevwatch" not in text and "from kevwatch" not in text
+
+
+def test_installer_mentions_no_live_task():
+    text = (ROOT / "scripts" / "install_kev_watch.ps1").read_text(encoding="utf-8")
+    for forbidden in ("live_day", "national_day", "run_snapshot", "PATCHWATCH_GATE_A", "SNAPSHOT_DAYS"):
+        assert forbidden not in text
+
+
 # ------------------------------------------------------------------ the national arm (silent until a wave is released)
 def release(box, wave="1"):
     (box.tmp / "national_active_wave.txt").write_text(wave, encoding="utf-8")

@@ -60,6 +60,7 @@ BACKUPS = ROOT / "backups"
 OPTOUTS = LOGS / "optouts.md"
 BLOCKLIST_LOCAL = ROOT / "blocklist.local.txt"
 HUB = LOGS / "hub"
+KEVWATCH = LOGS / "kevwatch"
 CHECKS = HUB / "checks"
 OVERSIGHT = LOGS / "oversight"
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
@@ -82,6 +83,7 @@ EXPECTED_ASN = "AS40379"
 MIN_FREE_GB = 2
 CHECK_NAMES = {"prerun": "08:30 pre-run", "optout": "08:45 opt-outs", "started": "09:45 did it start?",
                "postrun": "11:30 post-run", "lastchance": "18:00 last chance", "oversight": "11:45 oversight"}
+CHECK_NAMES["kevwatch"] = "06:45 KEV watcher"
 RANK = {"ok": 0, "info": 0, "warn": 1, "fail": 2}
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
@@ -204,6 +206,103 @@ def notify(title: str, body: str) -> None:
        "$app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe';"
        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($app).Show([Windows.UI.Notifications.ToastNotification]::new($x))",
        timeout=30)
+
+
+def check_kevwatch(now: dt.datetime) -> list[Result]:
+    state_path = KEVWATCH / "state.json"
+    run_path = KEVWATCH / "last_run.json"
+    if not state_path.exists() and not run_path.exists():
+        return [Result("KEV watcher", "warn", "not installed yet (no state)")]
+    if not state_path.exists() or not run_path.exists():
+        return [Result("KEV watcher", "fail", "state.json or last_run.json is missing")]
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        last_run = json.loads(run_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        return [Result("KEV watcher", "fail", f"could not read watcher status: {type(exc).__name__}: {exc}")]
+    if not isinstance(state, dict) or not isinstance(last_run, dict):
+        return [Result("KEV watcher", "fail", "state.json and last_run.json must contain JSON objects")]
+
+    reasons = []
+    try:
+        success = dt.datetime.fromisoformat(state["last_success_utc"].replace("Z", "+00:00"))
+        if success.tzinfo is None:
+            success = success.replace(tzinfo=dt.timezone.utc)
+        age = now.astimezone(dt.timezone.utc) - success.astimezone(dt.timezone.utc)
+        if age > dt.timedelta(hours=36):
+            reasons.append(f"last success is stale ({state['last_success_utc']})")
+    except (KeyError, AttributeError, TypeError, ValueError):
+        reasons.append("last_success_utc is missing or invalid")
+    failures = state.get("consecutive_failures")
+    if type(failures) is not int or failures < 0:
+        reasons.append("consecutive_failures is missing or invalid")
+    elif failures >= 3:
+        reasons.append(f"{failures} consecutive feed failures")
+    if last_run.get("exit_code") in (4, 6):
+        reasons.append(f"last run exited {last_run['exit_code']}")
+    if reasons:
+        out = [Result("KEV watcher", "fail", "; ".join(reasons))]
+    else:
+        out = [Result(
+            "KEV watcher",
+            "ok",
+            f"last success {state['last_success_utc']}, catalog {state.get('catalog_version', '')}",
+        )]
+
+    candidates = state.get("candidates", {})
+    if not isinstance(candidates, dict):
+        return out + [Result("KEV watcher candidates", "fail", "candidates is not an object")]
+    try:
+        notified_path = KEVWATCH / "notified.json"
+        notified = json.loads(notified_path.read_text(encoding="utf-8")) if notified_path.exists() else []
+    except (OSError, UnicodeError, ValueError) as exc:
+        return out + [Result("KEV watcher notifications", "fail",
+                             f"could not read notified.json: {type(exc).__name__}: {exc}")]
+    if not isinstance(notified, list) or not all(isinstance(cve, str) for cve in notified):
+        return out + [Result("KEV watcher notifications", "fail", "notified.json must contain a list of CVE ids")]
+
+    now_utc = now.astimezone(dt.timezone.utc)
+    cutoff = now_utc - dt.timedelta(days=7)
+    wrote_notifications = False
+    for cve, candidate in sorted(candidates.items()):
+        if not isinstance(candidate, dict):
+            out.append(Result(f"KEV candidate {cve}", "fail", "candidate record is invalid"))
+            continue
+        try:
+            first_seen = dt.datetime.fromisoformat(candidate["first_seen_utc"].replace("Z", "+00:00"))
+            if first_seen.tzinfo is None:
+                first_seen = first_seen.replace(tzinfo=dt.timezone.utc)
+            first_seen = first_seen.astimezone(dt.timezone.utc)
+        except (KeyError, AttributeError, TypeError, ValueError):
+            out.append(Result(f"KEV candidate {cve}", "fail", "first_seen_utc is missing or invalid"))
+            continue
+        if cutoff <= first_seen <= now_utc:
+            out.append(Result(
+                f"KEV candidate {cve}",
+                "warn",
+                f"{candidate.get('product_key', 'unknown')}, due {candidate.get('due') or 'n/a'}: "
+                f"see {candidate.get('packet_dir', 'packet unavailable')}",
+            ))
+        if not candidate.get("notified", False) and cve not in notified:
+            notify("patch-watch: new KEV candidate", f"{cve} {candidate.get('product', candidate.get('product_key', ''))}".strip())
+            notified.append(cve)
+            wrote_notifications = True
+    if wrote_notifications:
+        KEVWATCH.mkdir(parents=True, exist_ok=True)
+        notified_path.write_text(
+            json.dumps(sorted(set(notified)), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+    near_misses = last_run.get("near_misses", [])
+    names = last_run.get("near_miss_names", [])
+    if isinstance(near_misses, list) and near_misses:
+        if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
+            out.append(Result("KEV near misses", "fail", "near_miss_names is invalid"))
+        else:
+            out.append(Result("KEV near misses", "info", ", ".join(names) or "near misses recorded without names"))
+    return out
 
 
 # ---------------------------------------------------------------- the checks
@@ -773,7 +872,7 @@ def _write_oversight(day: dt.date, results: list[Result]) -> None:
 
 CHECKS_FN = {"prerun": lambda n: check_prerun(n), "optout": lambda n: check_optout(n), "started": lambda n: check_started(n, False),
              "postrun": lambda n: check_postrun(n), "lastchance": lambda n: check_started(n, True),
-             "oversight": lambda n: check_oversight(n)}
+             "oversight": lambda n: check_oversight(n), "kevwatch": lambda n: check_kevwatch(n)}
 
 
 def run_check(name: str) -> int:
