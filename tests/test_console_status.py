@@ -136,6 +136,8 @@ def _frame(path, n):
 
 def test_mock_run_end_to_end_prints_counts_and_no_domain(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ABUSE_FLAG_PATH", tmp_path / "abuse.flag")
+    for name in ("REPORTS_DIR", "DATA_DIR", "LOGS_DIR"):     # a mock run writes a report, a ledger CSV and a log
+        monkeypatch.setattr(config, name, tmp_path / name.lower())
     frame = tmp_path / "f.csv"
     _frame(frame, 6)
     out = io.StringIO()
@@ -152,6 +154,8 @@ def test_mock_run_end_to_end_prints_counts_and_no_domain(tmp_path, monkeypatch):
 
 def test_progress_off_by_default_for_library_callers(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ABUSE_FLAG_PATH", tmp_path / "abuse.flag")
+    for name in ("REPORTS_DIR", "DATA_DIR", "LOGS_DIR"):     # a mock run writes a report, a ledger CSV and a log
+        monkeypatch.setattr(config, name, tmp_path / name.lower())
     frame = tmp_path / "f.csv"
     _frame(frame, 2)
     opened = []
