@@ -521,3 +521,11 @@ def test_enrich_reports_missing_malformed_and_raised_fetch(tmp_path):
         "CVE-2026-109619", tmp_path, lambda *args: (_ for _ in ()).throw(OSError("offline"))
     )
     assert record is None and errors == ["OSError: offline"]
+
+
+def test_bootstrap_state_sets_success_time():
+    cat = kw.parse_catalog(catalog([entry("CVE-2026-1")], "v1"))
+    state = kw.bootstrap_state(cat, "2026-11-02T12:00:00Z")
+    assert state["last_attempt_utc"] == "2026-11-02T12:00:00Z"
+    assert state["last_success_utc"] == "2026-11-02T12:00:00Z"
+    assert state["consecutive_failures"] == 0

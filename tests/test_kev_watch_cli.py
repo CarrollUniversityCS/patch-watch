@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 import socket
 import sqlite3
@@ -357,3 +358,19 @@ def test_live_collector_files_do_not_reference_watcher():
 
 def test_intake_still_refuses_gov_hosts():
     assert kw.intake._host_ok("https://example.gov/a") is False
+
+
+def test_bootstrap_records_a_success_time(tmp_path):
+    assert bootstrap(tmp_path) == 0
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["last_attempt_utc"] == "2026-11-02T12:00:00Z"
+    assert state["last_success_utc"] == "2026-11-02T12:00:00Z"
+    assert state["consecutive_failures"] == 0
+    assert state["last_error"] == ""
+
+
+def test_status_check_accepts_a_fresh_bootstrap(tmp_path):
+    assert bootstrap(tmp_path) == 0
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["last_success_utc"], "a bootstrap must leave a valid success time for the 06:45 check"
+    assert dt.datetime.fromisoformat(state["last_success_utc"].replace("Z", "+00:00"))

@@ -221,6 +221,9 @@ def bootstrap_state(cat: dict, now: str) -> dict:
     state["seen"] = {entry["cve"]: seen_record(entry) for entry in cat["entries"]}
     state["catalog_version"] = cat.get("version", "")
     state["catalog_sha256"] = cat.get("sha256", "")
+    # Reading the catalog successfully is the bootstrap's success; the status check needs a valid time.
+    state["last_attempt_utc"] = now
+    state["last_success_utc"] = now
     return state
 
 
