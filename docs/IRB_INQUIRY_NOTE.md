@@ -50,6 +50,16 @@ Security).
 - **A hard stop**: the pipeline halts itself if more than 10% of a rolling window of 50
   requests returns an error, block or rate-limit response, or if an abuse complaint
   arrives, and an operator can stop all traffic by placing a file on disk.
+
+Update, 2026-10-28 (rolling window). On 2026-10-26 the overload monitor's rolling
+window was enlarged from 50 to 200 phase outcomes (redirect hops are not separate
+entries). The thresholds (halt if more than 10% of the window is 429/5xx; separate
+trip if more than 30% is 401/403), the halt behavior, and the cap of three phases per
+domain per day are unchanged. Reason: on 2026-10-24 a burst of Cloudflare-originated
+502/503/522/525 responses tripped the 50-outcome window although only 2.1% of that run's
+outcomes were failures. Effect: a genuine overload may be detected up to about four
+times later, in outcome count.
+
 - **No individual publication**: aggregate group statistics only; per-domain results are
   never published or shared, including any list of sites that appear unpatched.
 - **Data locality**: all data stays on a university-controlled machine; the working
