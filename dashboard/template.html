@@ -248,9 +248,19 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
   .step:nth-child(2n) { border-right: 0; margin-right: 0; }
 }
 .seg:hover, .seg:focus-visible { filter: brightness(1.12); }
+.skip { position: absolute; left: -9999px; top: 8px; background: var(--bg); color: var(--ink); padding: 10px 14px; border: 2px solid var(--accent); z-index: 40; font-weight: 600; }
+.skip:focus { left: 8px; }
+.col:focus-visible, .pop:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+main:focus { outline: none; }
+/* Windows High Contrast and similar: keep the status colours (they carry the meaning) and give every fill an edge. */
+@media (forced-colors: active) {
+  .seg, .fun-bar, .u-fill, .sw, .tl-dot { forced-color-adjust: none; border: 1px solid CanvasText; }
+  .hatch { background-color: Canvas; }
+}
 </style>
 
 <div id="app">
+  <a class="skip" href="#main">Skip to the content</a>
   <header class="masthead" id="top">
     <div class="inner">
       <div class="org"><a href="https://carrolluniversitycs.github.io/">Carroll University, Computer Science</a> · passive measurement</div>
@@ -262,7 +272,7 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
     </div>
   </header>
   <nav class="nav" aria-label="Sections"><div class="inner" id="nav"></div></nav>
-  <main class="inner" id="main"></main>
+  <main class="inner" id="main" tabindex="-1"></main>
   <noscript><p class="banner">This page draws its charts with JavaScript. The same numbers are in the run reports under <span class="mono">reports/</span>.</p></noscript>
   <footer>
     <div class="inner">
@@ -327,6 +337,14 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
     node.addEventListener("focus", function (ev) { showTip(ev, text); });
     node.addEventListener("blur", hideTip);
   }
+  // Keyboard users get one stop per column or bar (the whole label), not one per coloured segment.
+  function focusTip(node, text) {
+    node.addEventListener("focus", function () {
+      var r = node.getBoundingClientRect();
+      showTip({ target: node, clientX: r.left + 8, clientY: Math.max(8, r.top - 70) }, text);
+    });
+    node.addEventListener("blur", hideTip);
+  }
   function swatch(state) {
     var s = el("i", { class: "sw", "aria-hidden": "true" });
     s.style.background = "var(" + STATE[state].cls + ")";
@@ -385,17 +403,18 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
     // latest snapshot: who is where
     var snap = el("div", { class: "box" });
     snap.appendChild(el("h3", null, [REGION[p0.region] + ", latest snapshot", el("span", { class: "fine", text: " · the " + lastp.P + " sites that show PHP, " + fmtDate(lastp.started) })]));
-    var pop = el("div", { class: "pop", role: "img", "aria-label": barLabel(lastp, e) });
+    var pop = el("div", { class: "pop", role: "img", tabindex: "0", "aria-label": barLabel(lastp, e) });
+    focusTip(pop, barLabel(lastp, e));
     if (lastp.P_n) {
       ORDER.forEach(function (s) {
         var n = lastp.shown[s]; if (!n) return;
-        var seg = el("span", { class: "seg " + STATE[s].ink, tabindex: "0" }, [el("b", { text: String(n) }), el("span", { text: STATE[s].short })]);
+        var seg = el("span", { class: "seg " + STATE[s].ink }, [el("b", { text: String(n) }), el("span", { text: STATE[s].short })]);
         seg.style.flex = n + " 0 0"; seg.style.background = "var(" + STATE[s].cls + ")";
         hook(seg, STATE[s].icon + " " + STATE[s].label + ": " + n + " of " + lastp.P_n + " (" + Math.round(100 * n / lastp.P_n) + "%). " + STATE[s].note + ".");
         pop.appendChild(seg);
       });
       if (lastp.withheld > 0) {
-        var w = el("span", { class: "seg hatch light", tabindex: "0" }, [el("b", { text: String(lastp.withheld) }), el("span", { text: "Withheld" })]);
+        var w = el("span", { class: "seg hatch light" }, [el("b", { text: String(lastp.withheld) }), el("span", { text: "Withheld" })]);
         w.style.flex = lastp.withheld + " 0 0";
         hook(w, "Withheld: " + lastp.withheld + " domains, each cell under 10 or held back so the others cannot be worked out.");
         pop.appendChild(w);
@@ -520,25 +539,26 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
           xl.appendChild(el("div", { class: "sep-l", "aria-hidden": "true" }));
         }
       }
-      var col = el("div", { class: "col" + (p.preliminary ? " prelim" : ""), role: "img", "aria-label": barLabel(p, e) });
+      var col = el("div", { class: "col" + (p.preliminary ? " prelim" : ""), role: "img", tabindex: "0", "aria-label": barLabel(p, e) });
+      focusTip(col, barLabel(p, e));
       col.appendChild(el("div", { class: "top" + (p.patched_share === WITHHELD || p.patched_share === "–" ? " none" : ""), text: p.patched_share === WITHHELD ? "withheld" : p.patched_share === "–" ? "–" : p.patched_share }));
       if (p.P_n) {
         ORDER.forEach(function (s) {
           var n = p.shown[s]; if (!n) return;
-          var seg = el("span", { class: "seg", tabindex: "0" });
+          var seg = el("span", { class: "seg" });
           seg.style.flex = n + " 0 0"; seg.style.background = "var(" + STATE[s].cls + ")";
           hook(seg, STATE[s].icon + " " + STATE[s].label + ": " + n + " of " + p.P_n + " (" + Math.round(100 * n / p.P_n) + "%). " + STATE[s].note + ".");
           col.appendChild(seg);
         });
         if (p.withheld > 0) {
-          var w = el("span", { class: "seg hatch", tabindex: "0" });
+          var w = el("span", { class: "seg hatch" });
           w.style.flex = p.withheld + " 0 0";
           var hidden = ORDER.filter(function (s) { return !(s in p.shown) && p.cells[s] !== "0"; }).map(function (s) { return STATE[s].label; });
           hook(w, "Withheld: " + p.withheld + " domains across " + hidden.join(", ") + ", each under 10 or held back so the others cannot be worked out.");
           col.appendChild(w);
         }
       } else {
-        var nn = el("span", { class: "seg hatch", tabindex: "0" });
+        var nn = el("span", { class: "seg hatch" });
         nn.style.flex = "1 0 0";
         hook(nn, "Fewer than 10 domains with PHP evidence; withheld.");
         col.appendChild(nn);
@@ -607,6 +627,7 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
     var head = ["Region", "Snapshot", "Day", "Unsupported", "Placeable", "Share"];
     var trs = rows.map(function (r) { return [REGION[r.region.region] || r.region.region, r.p.label, r.p.day.toFixed(1), r.u.n, r.u.of, r.u.share]; });
     var table = el("table", null, [
+      el("caption", { text: "Sites on a PHP branch that is no longer fixed, by snapshot." }),
       el("thead", null, [el("tr", null, head.map(function (h) { return el("th", { scope: "col", text: h }); }))]),
       el("tbody", null, trs.map(function (t) { return el("tr", null, t.map(function (c) { return el("td", { text: String(c) }); })); }))
     ]);
@@ -729,8 +750,9 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
 
   function barLabel(p, e) {
     var pre = p.preliminary ? " Preliminary: fewer than " + e.preliminary_before_days + " days since the fix." : "";
-    if (!p.P_n) return "Day " + p.day.toFixed(1) + ": withheld, fewer than 10 domains with PHP evidence." + pre;
-    return "Day " + p.day.toFixed(1) + ", " + p.P + " domains with PHP evidence: " +
+    var when = "Day " + p.day.toFixed(1) + " (" + fmtDate(p.started) + "), " + p.funnel.domains + " sites checked";
+    if (!p.P_n) return when + ": withheld, fewer than 10 domains with PHP evidence." + pre;
+    return when + ", " + p.P + " domains with PHP evidence: " +
       ORDER.map(function (s) { return STATE[s].label + " " + p.cells[s]; }).join(", ") + ". Patched share of visible versions " + p.patched_share + "." + pre;
   }
   function tableView(e) {
@@ -743,6 +765,7 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
       });
     });
     var table = el("table", null, [
+      el("caption", { text: "Every snapshot: counts of domains by patch state. Withheld cells show § or <10." }),
       el("thead", null, [el("tr", null, head.map(function (h) { return el("th", { scope: "col", text: h }); }))]),
       el("tbody", null, rows.map(function (r) { return el("tr", null, r.map(function (c) { return el("td", { text: String(c) }); })); }))
     ]);
