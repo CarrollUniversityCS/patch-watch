@@ -61,6 +61,7 @@ OPTOUTS = LOGS / "optouts.md"
 BLOCKLIST_LOCAL = ROOT / "blocklist.local.txt"
 HUB = LOGS / "hub"
 KEVWATCH = LOGS / "kevwatch"
+PHPWATCH = LOGS / "phpwatch"
 CHECKS = HUB / "checks"
 OVERSIGHT = LOGS / "oversight"
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
@@ -84,6 +85,7 @@ MIN_FREE_GB = 2
 CHECK_NAMES = {"prerun": "08:30 pre-run", "optout": "08:45 opt-outs", "started": "09:45 did it start?",
                "postrun": "11:30 post-run", "lastchance": "18:00 last chance", "oversight": "11:45 oversight"}
 CHECK_NAMES["kevwatch"] = "06:45 KEV watcher"
+CHECK_NAMES["phpwatch"] = "07:05 PHP release watcher"
 RANK = {"ok": 0, "info": 0, "warn": 1, "fail": 2}
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
@@ -302,6 +304,82 @@ def check_kevwatch(now: dt.datetime) -> list[Result]:
             out.append(Result("KEV near misses", "fail", "near_miss_names is invalid"))
         else:
             out.append(Result("KEV near misses", "info", ", ".join(names) or "near misses recorded without names"))
+    return out
+
+
+def _read_json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _utc(text: str) -> dt.datetime:
+    t = dt.datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    return t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+
+
+def check_phpwatch(now: dt.datetime) -> list[Result]:
+    """The PHP release watcher (scripts/php_release_watch.py). A new release is red until acknowledged in ack.txt, because
+    patch speed has to be measured from the vendor release day. Reads files only; never imports the watcher."""
+    name = "PHP release watcher"
+    health_p, state_p, run_p = PHPWATCH / "health.json", PHPWATCH / "state.json", PHPWATCH / "last_run.json"
+    if not any(p.exists() for p in (health_p, state_p, run_p)):
+        return [Result(name, "warn", "not installed yet (no state)")]
+    try:
+        health, state, last_run = _read_json(health_p), _read_json(state_p), _read_json(run_p)
+        if not all(isinstance(x, dict) for x in (health, state, last_run)):
+            raise ValueError("a status file is not a JSON object")
+    except (OSError, UnicodeError, ValueError) as exc:
+        return [Result(name, "fail", f"could not read watcher status: {type(exc).__name__}: {exc}")]
+    now_utc = now.astimezone(dt.timezone.utc)
+    reasons = []
+    try:
+        age = now_utc - _utc(health["last_success_utc"])
+        if age > dt.timedelta(hours=36):
+            reasons.append(f"last success is stale ({health['last_success_utc']})")
+    except (KeyError, TypeError, ValueError):
+        age = None
+        reasons.append("last_success_utc is missing or invalid")
+    fails = health.get("consecutive_failures")
+    if type(fails) is not int or fails < 0:
+        reasons.append("consecutive_failures is missing or invalid")
+    elif fails >= 3:
+        reasons.append(f"{fails} consecutive failures reading php.net")
+    expected = (last_run.get("next") or {}).get("expected")
+    try:
+        exp = dt.date.fromisoformat(expected) if expected else None
+    except (TypeError, ValueError):
+        exp = None
+    today = now.astimezone(CHI).date()
+    if exp and abs((today - exp).days) <= 1 and (age is None or age > dt.timedelta(hours=12)) and not reasons:
+        reasons.append(f"inside the release window (expected {exp.isoformat()}) and php.net was not read in the last 12 hours")
+    out = [Result(name, "fail", "; ".join(reasons))] if reasons else [
+        Result(name, "ok", f"last success {health.get('last_success_utc')}, {last_run.get('releases_known', '?')} releases known, "
+                           f"next expected {expected or 'unknown'}")]
+    try:
+        raw = (PHPWATCH / "new_releases.jsonl").read_text(encoding="utf-8") if (PHPWATCH / "new_releases.jsonl").exists() else ""
+        new = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        ack_p = PHPWATCH / "ack.txt"
+        acked = {ln.strip() for ln in ack_p.read_text(encoding="utf-8-sig").splitlines()} if ack_p.exists() else set()
+        noted_p = PHPWATCH / "notified.json"
+        noted = _read_json(noted_p) if noted_p.exists() else []
+        if not isinstance(noted, list):
+            raise ValueError("notified.json is not a list")
+    except (OSError, UnicodeError, ValueError) as exc:
+        return out + [Result("PHP releases", "fail", f"could not read release records: {type(exc).__name__}: {exc}")]
+    wrote = False
+    for rel in new:
+        version = str(rel.get("version", "?"))
+        if version in acked:
+            continue
+        out.append(Result(f"PHP release {version}", "fail",
+                          f"released {rel.get('date')}, first seen {rel.get('first_seen_utc')}: start the T2 release-day checklist, "
+                          f"then add {version} to logs/phpwatch/ack.txt"))
+        if version not in noted:
+            notify("patch-watch: new PHP release", f"{version} ({rel.get('date')})")
+            noted.append(version)
+            wrote = True
+    if wrote:
+        PHPWATCH.mkdir(parents=True, exist_ok=True)
+        (PHPWATCH / "notified.json").write_text(json.dumps(sorted(set(noted)), indent=2) + "\n", encoding="utf-8", newline="\n")
     return out
 
 
@@ -872,7 +950,8 @@ def _write_oversight(day: dt.date, results: list[Result]) -> None:
 
 CHECKS_FN = {"prerun": lambda n: check_prerun(n), "optout": lambda n: check_optout(n), "started": lambda n: check_started(n, False),
              "postrun": lambda n: check_postrun(n), "lastchance": lambda n: check_started(n, True),
-             "oversight": lambda n: check_oversight(n), "kevwatch": lambda n: check_kevwatch(n)}
+             "oversight": lambda n: check_oversight(n), "kevwatch": lambda n: check_kevwatch(n),
+             "phpwatch": lambda n: check_phpwatch(n)}
 
 
 def run_check(name: str) -> int:
