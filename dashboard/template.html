@@ -27,7 +27,7 @@
   --accent: #1a4480;
   --accent-soft: #e7eef8;
   --alert: #b3470f;
-  --st-patched: #1f7a3d;
+  --st-patched: #13795b;
   --st-exposed: #b50d2c;
   --st-eol: #d9682b;
   --st-ambiguous: #e0a400;
@@ -42,7 +42,7 @@
   :root:not([data-theme="light"]) {
     --bg: #14181d; --surface: #14181d; --wash: #1b2128; --ink: #eceff2; --ink-2: #bcc4cc; --ink-3: #98a2ad;
     --rule: #333c46; --rule-strong: #eceff2; --accent: #8db6ee; --accent-soft: #1c2a3d; --alert: #f09a68;
-    --st-patched: #3fb467; --st-exposed: #f0586a; --st-eol: #f59a55; --st-hidden: #4a5560; --st-withheld: #77828e;
+    --st-patched: #3fb8a0; --st-exposed: #ff5c7a; --st-eol: #f7b267; --st-hidden: #4a5560; --st-withheld: #77828e;
     --on-fill: #0b1320;
     color-scheme: dark;
   }
@@ -50,7 +50,7 @@
 :root[data-theme="dark"] {
   --bg: #14181d; --surface: #14181d; --wash: #1b2128; --ink: #eceff2; --ink-2: #bcc4cc; --ink-3: #98a2ad;
   --rule: #333c46; --rule-strong: #eceff2; --accent: #8db6ee; --accent-soft: #1c2a3d; --alert: #f09a68;
-  --st-patched: #3fb467; --st-exposed: #f0586a; --st-eol: #f59a55; --st-hidden: #4a5560; --st-withheld: #77828e;
+  --st-patched: #3fb8a0; --st-exposed: #ff5c7a; --st-eol: #f7b267; --st-hidden: #4a5560; --st-withheld: #77828e;
   --on-fill: #0b1320;
   color-scheme: dark;
 }
@@ -248,6 +248,9 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
   .step:nth-child(2n) { border-right: 0; margin-right: 0; }
 }
 .seg:hover, .seg:focus-visible { filter: brightness(1.12); }
+/* Colour is never the only cue: Exposed has vertical stripes, End of life has dots (chart columns and legend). */
+.col .seg.st-EXPOSED, .sw.st-EXPOSED { background-image: repeating-linear-gradient(90deg, rgba(0,0,0,.42) 0 2px, transparent 2px 6px); }
+.col .seg.st-EOL, .sw.st-EOL { background-image: radial-gradient(rgba(0,0,0,.5) 1.4px, transparent 1.7px); background-size: 6px 6px; }
 .skip { position: absolute; left: -9999px; top: 8px; background: var(--bg); color: var(--ink); padding: 10px 14px; border: 2px solid var(--accent); z-index: 40; font-weight: 600; }
 .skip:focus { left: 8px; }
 .col:focus-visible, .pop:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
@@ -347,7 +350,8 @@ main:focus { outline: none; }
   }
   function swatch(state) {
     var s = el("i", { class: "sw", "aria-hidden": "true" });
-    s.style.background = "var(" + STATE[state].cls + ")";
+    s.className = "sw st-" + state;
+    s.style.backgroundColor = "var(" + STATE[state].cls + ")";
     return s;
   }
 
@@ -409,7 +413,7 @@ main:focus { outline: none; }
       ORDER.forEach(function (s) {
         var n = lastp.shown[s]; if (!n) return;
         var seg = el("span", { class: "seg " + STATE[s].ink }, [el("b", { text: String(n) }), el("span", { text: STATE[s].short })]);
-        seg.style.flex = n + " 0 0"; seg.style.background = "var(" + STATE[s].cls + ")";
+        seg.style.flex = n + " 0 0"; seg.style.backgroundColor = "var(" + STATE[s].cls + ")";
         hook(seg, STATE[s].icon + " " + STATE[s].label + ": " + n + " of " + lastp.P_n + " (" + Math.round(100 * n / lastp.P_n) + "%). " + STATE[s].note + ".");
         pop.appendChild(seg);
       });
@@ -545,8 +549,8 @@ main:focus { outline: none; }
       if (p.P_n) {
         ORDER.forEach(function (s) {
           var n = p.shown[s]; if (!n) return;
-          var seg = el("span", { class: "seg" });
-          seg.style.flex = n + " 0 0"; seg.style.background = "var(" + STATE[s].cls + ")";
+          var seg = el("span", { class: "seg st-" + s });
+          seg.style.flex = n + " 0 0"; seg.style.backgroundColor = "var(" + STATE[s].cls + ")";
           hook(seg, STATE[s].icon + " " + STATE[s].label + ": " + n + " of " + p.P_n + " (" + Math.round(100 * n / p.P_n) + "%). " + STATE[s].note + ".");
           col.appendChild(seg);
         });
