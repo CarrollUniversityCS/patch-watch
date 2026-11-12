@@ -137,6 +137,16 @@ section { display: flex; flex-direction: column; gap: 22px; scroll-margin-top: 1
 .xlabels b { display: block; color: var(--ink); font-weight: 600; }
 .xlabels .pre { color: var(--ink-3); font-size: 12px; }
 .xlabels .due { color: var(--alert); font-weight: 600; font-size: 12px; }
+.xlabels .sz { color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.plot .sep, .xlabels .sep-l { flex: 0 0 22px; max-width: 22px; margin: 0; }
+.plot .sep.wave { background: linear-gradient(var(--ink-3), var(--ink-3)) 50% 0/2px 100% no-repeat; -webkit-mask: repeating-linear-gradient(to bottom, #000 0 4px, transparent 4px 8px); mask: repeating-linear-gradient(to bottom, #000 0 4px, transparent 4px 8px); }
+.chart-wrap { overflow-x: auto; }
+.chart-note { max-width: 78ch; }
+table caption { text-align: left; color: var(--ink-2); font-size: 14px; padding: 0 0 8px; }
+.cmp { min-width: 0; }
+.cmp th, .cmp td { white-space: normal; padding: 7px 8px; }
+.cmp td:first-child, .cmp th:first-child { text-align: left; }
+.cmp td:nth-child(2) { text-align: right; }
 .hatch { background-image: repeating-linear-gradient(45deg, var(--st-withheld) 0 2px, transparent 2px 5px); background-color: var(--st-hidden); }
 .chart-wrap { padding-top: 28px; }
 .caveat { font-size: 15px; color: var(--ink-2); max-width: 78ch; border-left: 3px solid var(--rule); padding: 2px 0 2px 14px; }
@@ -402,6 +412,8 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
     if (tl) two.appendChild(el("div", { class: "box" }, [tl])); else two.style.gridTemplateColumns = "minmax(0, 1fr)";
     sec.appendChild(two);
 
+    var cmp = compareBlock(e);
+    if (cmp) sec.appendChild(cmp);
     e.regions.forEach(function (rg) { sec.appendChild(trendBlock(e, rg)); });
 
     sec.appendChild(el("p", { class: "caveat", text: "A hidden version does not mean a site is patched, and a distro build can carry the fix without changing its version string. Those sites stay in their own segments and are left out of the patched share. These are domain counts from each run report; the pre-registered entity-level analysis is in reports/analysis_*.md." }));
@@ -451,6 +463,36 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
     return box;
   }
 
+  // Wisconsin beside the other states at each one's latest snapshot, as a plain table (counts as published).
+  function compareBlock(e) {
+    var wi = null, nat = null;
+    e.regions.forEach(function (rg) { if (rg.region === "wisconsin") wi = rg; if (rg.region === "national") nat = rg; });
+    if (!wi || !nat || !wi.points.length || !nat.points.length) return null;
+    var a = wi.points[wi.points.length - 1], b = nat.points[nat.points.length - 1];
+    function fmt(v) { var n = num(v); return n === null ? String(v) : n.toLocaleString("en-US"); }
+    function share(p) { return p.patched_share === WITHHELD ? "withheld" : p.patched_share; }
+    function eol(p) { var u = p.unsupported; return u.pct === null ? "withheld" : u.share + " (" + u.n + " of " + u.of + ")"; }
+    var rows = [
+      ["Snapshot date", fmtDate(a.started), fmtDate(b.started)],
+      ["Sites checked", fmt(a.funnel.domains), fmt(b.funnel.domains)],
+      ["Answered", fmt(a.funnel.reached), fmt(b.funnel.reached)],
+      ["Show PHP", fmt(a.funnel.php), fmt(b.funnel.php)],
+      ["Show a version we can rank", fmt(a.funnel.visible), fmt(b.funnel.visible)],
+      ["Patched, of those we can rank", share(a), share(b)],
+      ["On a branch PHP no longer fixes", eol(a), eol(b)]
+    ];
+    var table = el("table", { class: "cmp" }, [
+      el("caption", { text: "Latest snapshot for each group. These are different sets of sites, so read each column on its own." }),
+      el("thead", null, [el("tr", null, ["Measure", "Wisconsin", "Other states"].map(function (h) { return el("th", { scope: "col", text: h }); }))]),
+      el("tbody", null, rows.map(function (r) { return el("tr", null, r.map(function (c, i) { return el(i ? "td" : "th", i ? { text: String(c) } : { scope: "row", text: String(c) }); })); }))
+    ]);
+    return el("div", { class: "box" }, [
+      el("h3", null, ["Wisconsin and other states", el("span", { class: "fine", text: "latest snapshot of each" })]),
+      el("div", { class: "tbl-wrap" }, [table]),
+      el("p", { class: "fine", text: "Other states are added in waves and are not a random sample, so this is not a national estimate. Wisconsin is the primary study group." })
+    ]);
+  }
+
   // One column per snapshot, patched at the bottom. Dashed columns are preliminary.
   function trendBlock(e, rg) {
     var box = el("div", { class: "box" }, [
@@ -462,7 +504,19 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
     [["100%", 100], ["50%", 50], ["0%", 0]].forEach(function (t) { var s = el("span", { text: t[0] }); s.style.bottom = t[1] + "%"; y.appendChild(s); });
     var plot = el("div", { class: "plot" });
     var xl = el("div", { class: "xlabels" });
-    rg.points.forEach(function (p) {
+    var sawWave = false, sawGap = false, sawDue = false;
+    rg.points.forEach(function (p, i) {
+      var prev = i ? rg.points[i - 1] : null;
+      if (prev) {
+        var a = num(prev.funnel.domains), b = num(p.funnel.domains);
+        var isWave = a !== null && b !== null && a !== b;
+        var isGap = p.day - prev.day > 3;
+        if (isWave || isGap) {
+          sawWave = sawWave || isWave; sawGap = sawGap || isGap;
+          plot.appendChild(el("div", { class: "sep " + (isWave ? "wave" : "gap"), "aria-hidden": "true" }));
+          xl.appendChild(el("div", { class: "sep-l", "aria-hidden": "true" }));
+        }
+      }
       var col = el("div", { class: "col" + (p.preliminary ? " prelim" : ""), role: "img", "aria-label": barLabel(p, e) });
       col.appendChild(el("div", { class: "top" + (p.patched_share === WITHHELD || p.patched_share === "–" ? " none" : ""), text: p.patched_share === WITHHELD ? "withheld" : p.patched_share === "–" ? "–" : p.patched_share }));
       if (p.P_n) {
@@ -487,12 +541,22 @@ footer .inner { display: flex; flex-direction: column; gap: 8px; max-width: 880p
         col.appendChild(nn);
       }
       plot.appendChild(col);
-      xl.appendChild(el("div", { html: "<b>Day " + p.day.toFixed(1) + "</b>" + fmtDate(p.started) + (p.after_federal_due ? "<span class=\"due\"><br>past federal deadline</span>" : "") + (p.preliminary ? "<span class=\"pre\"><br>preliminary</span>" : "") }));
+      var firstDue = p.after_federal_due && !sawDue;
+      if (p.after_federal_due) sawDue = true;
+      var size = num(p.funnel.domains);
+      xl.appendChild(el("div", { html: "<b>Day " + p.day.toFixed(1) + "</b>" + fmtDate(p.started) + "<span class=\"sz\"><br>" + (size === null ? p.funnel.domains : size.toLocaleString("en-US")) + " sites</span>" + (firstDue ? "<span class=\"due\"><br>federal deadline passed</span>" : "") + (p.preliminary ? "<span class=\"pre\"><br>preliminary</span>" : "") }));
     });
+    var minW = 48 + rg.points.length * 74;
+    chart.style.minWidth = minW + "px";
     chart.appendChild(y); chart.appendChild(plot);
     wrap.appendChild(chart);
-    wrap.appendChild(el("div", { class: "xaxis" }, [el("span"), xl]));
+    wrap.appendChild(el("div", { class: "xaxis", style: "min-width:" + minW + "px" }, [el("span"), xl]));
     box.appendChild(wrap);
+    var notes = ["On a narrow screen this chart scrolls sideways. The number under each date is how many sites were checked in that snapshot."];
+    if (sawDue) notes.push("Every column from the one marked after the federal deadline onward was taken after it passed.");
+    if (sawWave) notes.push("A dotted line means more sites were added (a new release of states), so the columns on either side cover different sets of sites. Compare columns only within the same set.");
+    if (sawGap) notes.push("A blank space means days with no snapshot, so the columns are not evenly spaced in time.");
+    box.appendChild(el("p", { class: "fine chart-note", text: notes.join(" ") }));
     return box;
   }
 
