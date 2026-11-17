@@ -44,7 +44,7 @@ Cohort: <10 entities. Flapping entities excluded: 0. Became visible only later (
 
 | point | day | cohort | patched | still exposed | went dark | went ambiguous | unreached | A(d) |
 |---|---|---|---|---|---|---|---|---|
-| R20261024T140522Z_CMP_20261024 | 3.0 | 9 | 0 | <10 | 0 | 0 | 0 | § |
+| R20261024T140522Z_CMP_20261024 | 3.0 | § | 0 | <10 | 0 | 0 | 0 | § |
 
 ### RQ3 - time to patch (Turnbull NPMLE, interval-censored)
 

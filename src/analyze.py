@@ -783,9 +783,10 @@ def _rq23(co: Cohort, sup: Suppressor) -> list[str]:
          f"cohort): {sup.count(co.late_visible)}.", ""]
     rows = []
     for c in co.curve:
-        rows.append([c["point"], f"{c['day']:.1f}", str(c["cohort"]),
-                     *sup.row([c["patched"], c["exposed"], c["went_dark"],
-                               c["went_ambiguous"], c["unreached"]]),
+        cells = [c["patched"], c["exposed"], c["went_dark"], c["went_ambiguous"], c["unreached"]]
+        # The cohort size is the sum of the five cells, so it is suppressed like any other count and withheld
+        # when it would let a reader recover a hidden cell (a cohort of 9 with four zero cells is the 9th).
+        rows.append([c["point"], f"{c['day']:.1f}", sup.total(cells, c["cohort"]), *sup.row(cells),
                      sup.share(c["patched"], c["denominator"])])
     L += _table(["point", "day", "cohort", "patched", "still exposed", "went dark",
                  "went ambiguous", "unreached", "A(d)"], rows) + [""]

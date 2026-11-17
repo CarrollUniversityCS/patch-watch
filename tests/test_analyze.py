@@ -276,3 +276,31 @@ def test_unsupported_section_survives_unparseable_run_config(study):
     runs = _with_regions(conn)
     runs[0]["config_json"] = "{not json"
     analyze._unsupported(conn, frame, runs, analyze.Suppressor(on=False))   # must not raise
+
+
+def _rq2_cohort(curve_rows, members=9):
+    from types import SimpleNamespace
+    return SimpleNamespace(members=list(range(members)), flapping_excluded=0, late_visible=0,
+                           curve=curve_rows, intervals=[], hid_without_patching=0)
+
+
+def test_rq2_cohort_size_is_not_a_back_door_to_a_hidden_cell():
+    """A cohort of 9 with four zero cells is the ninth cell: the cohort column must not print a raw 1-9."""
+    row = {"point": "P1", "day": 3.0, "cohort": 9, "patched": 0, "exposed": 9, "went_dark": 0,
+           "went_ambiguous": 0, "unreached": 0, "denominator": 9}
+    text = "\n".join(analyze._rq23(_rq2_cohort([row]), analyze.Suppressor()))
+    line = next(l for l in text.splitlines() if l.startswith("| P1"))
+    cells = [c.strip() for c in line.strip("|").split("|")]
+    assert cells[2] != "9" and "9" not in cells, line
+    assert cells[2] in ("<10", "§")
+    # suppression off (internal use) still prints the real numbers
+    text_off = "\n".join(analyze._rq23(_rq2_cohort([row]), analyze.Suppressor(on=False)))
+    assert "| 9 | 0 | 9 |" in text_off
+
+
+def test_rq2_large_cohort_still_shown():
+    row = {"point": "P1", "day": 3.0, "cohort": 60, "patched": 20, "exposed": 30, "went_dark": 5,
+           "went_ambiguous": 3, "unreached": 2, "denominator": 50}
+    text = "\n".join(analyze._rq23(_rq2_cohort([row], members=60), analyze.Suppressor()))
+    line = next(l for l in text.splitlines() if l.startswith("| P1"))
+    assert "| 60 |" in line
