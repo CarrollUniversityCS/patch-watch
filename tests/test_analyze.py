@@ -304,3 +304,20 @@ def test_rq2_large_cohort_still_shown():
     text = "\n".join(analyze._rq23(_rq2_cohort([row], members=60), analyze.Suppressor()))
     line = next(l for l in text.splitlines() if l.startswith("| P1"))
     assert "| 60 |" in line
+
+
+def test_load_live_leaves_out_burst_day_runs_unless_asked(study, monkeypatch):
+    import datetime as dt
+    import approved_days
+    conn, frame = study
+    add_run(conn, "B1", "2026-10-25T14:00:00Z")
+    add_obs(conn, "B1", "a.gov", "2026-10-25T14:00:00Z", headers=xpb("8.3.36"))
+    conn.commit()
+    monkeypatch.setattr(approved_days, "load", lambda *a, **k: (frozenset({dt.date(2026, 10, 25)}), []))
+    _, runs = analyze.load_live(conn, frame, versions.PHP2SHELL)
+    assert "B1" not in {r["run_id"] for r in runs} and {"S1", "S2"} <= {r["run_id"] for r in runs}
+    _, runs = analyze.load_live(conn, frame, versions.PHP2SHELL, include_burst=True)
+    assert "B1" in {r["run_id"] for r in runs}
+    monkeypatch.setattr(approved_days, "load", lambda *a, **k: (frozenset(), ["entry 1: bad"]))
+    with pytest.raises(ValueError, match="approved_days.json"):
+        analyze.load_live(conn, frame, versions.PHP2SHELL)

@@ -55,6 +55,8 @@ from typing import NoReturn
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+import approved_days  # noqa: E402  (stdlib only; the burst days of amendment T2)
 SAMPLE = ROOT / "data" / "wi_frame.csv"
 DB_PATH = ROOT / "data" / "study.db"
 ABUSE_FLAG = ROOT / "logs" / "abuse.flag"
@@ -70,10 +72,14 @@ def _days(first: dt.date, last: dt.date) -> tuple[dt.date, ...]:
 
 
 # Plan section 6 / scripts/cron.disabled: daily S1 .. day 14, then days 21, 28, 45, 60, 90.
-SNAPSHOT_DAYS: frozenset[dt.date] = frozenset(
+PLAN_DAYS: frozenset[dt.date] = frozenset(
     _days(dt.date(2026, 10, 23), dt.date(2026, 11, 4))
     + (dt.date(2026, 11, 11), dt.date(2026, 11, 18), dt.date(2026, 12, 5),
        dt.date(2026, 12, 20), dt.date(2027, 1, 19)))
+# Burst days of amendment T2: entered by Jack in docs/approved_days.json (empty until a release), at most 7. A bad file
+# adds nothing and is reported at every run, so a typo cannot silently drop or invent a day.
+BURST_DAYS, APPROVED_DAYS_ERRORS = approved_days.load(planned=PLAN_DAYS)
+SNAPSHOT_DAYS: frozenset[dt.date] = PLAN_DAYS | BURST_DAYS
 LATEST_START = dt.time(19, 0)               # runbook section 5.3: never start after 19:00
 MIN_GAP = dt.timedelta(hours=12)            # floor between two runs of one region
 
@@ -202,7 +208,8 @@ def stop_rule_met() -> str:
     try:
         complete = [r for r in _runs(conn)
                     if r[4].get("region") == STOP_RULE_REGION and r[2] and not r[3]
-                    and not r[4].get("mock")]
+                    and not r[4].get("mock")
+                    and not approved_days.is_burst_run(r[1], BURST_DAYS)]    # burst days never count (amendment T2)
         last = complete[-STOP_RULE_RUNS:]
         if len(last) < STOP_RULE_RUNS:
             return ""
@@ -226,6 +233,8 @@ def main(argv: list[str]) -> int:
         refuse("usage: live_day.py [YYYYMMDD]  (omit for today, America/Chicago)",
                EXIT_WRONG_DAY)
     day = argv[1] if len(argv) == 2 else today
+    for problem in APPROVED_DAYS_ERRORS:
+        print(f"live_day WARNING: docs/approved_days.json is not used: {problem}")
     if day != today:
         refuse(f"this task is dated {day} but today is {today}; running would break "
                f"one-snapshot-per-region-per-day (section 2.5)", EXIT_WRONG_DAY)

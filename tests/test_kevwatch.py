@@ -30,7 +30,7 @@ def test_snapshot_days_match_live_day():
     spec = importlib.util.spec_from_file_location("live_day", ROOT / "scripts" / "live_day.py")
     live_day = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(live_day)
-    assert set(kw.SNAPSHOT_DAYS) == {day.isoformat() for day in live_day.SNAPSHOT_DAYS}
+    assert set(kw.SNAPSHOT_DAYS) == {day.isoformat() for day in live_day.PLAN_DAYS}
 
 
 def catalog(entries, version="fixture"):

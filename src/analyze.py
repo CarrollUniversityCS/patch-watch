@@ -38,6 +38,7 @@ import detect
 import disclosure
 import hosting
 import support_status
+import approved_days
 import versions
 
 # ------------------------------------------------------------------ analysis states (§5)
@@ -159,14 +160,22 @@ def _reclassify(row: sqlite3.Row | dict, event: versions.PatchEvent) -> classify
 
 
 def load_live(conn: sqlite3.Connection, frame: Frame, event: versions.PatchEvent,
-              include_mock: bool = False) -> tuple[list[Reading], list[dict[str, Any]]]:
+              include_mock: bool = False, include_burst: bool = False) -> tuple[list[Reading], list[dict[str, Any]]]:
     """Live readings from trustworthy runs. A run whose ledger audit failed is not
     analysed (docs/OPERATIONS.md); a run halted by the kill switch is, because its
-    unsent domains are already NOT_MEASURED."""
+    unsent domains are already NOT_MEASURED.
+
+    Runs on the T2 burst days (docs/approved_days.json) are left out: amendment T2 section 4 keeps them out of
+    every v1.0 and T1 computation. include_burst=True is for T2-only use. A bad approved-days file raises."""
+    burst, problems = approved_days.load()
+    if problems:
+        raise ValueError("docs/approved_days.json: " + "; ".join(problems))
     runs = []
     for r in conn.execute("SELECT * FROM runs ORDER BY started_at_utc"):
         mock = (r["notes"] or "").startswith("mock") or '"mock": true' in (r["config_json"] or "")
         if r["kill_switch"] == "audit_violation" or (mock and not include_mock):
+            continue
+        if not include_burst and approved_days.is_burst_run(r["started_at_utc"], burst):
             continue
         runs.append(dict(r))
     keep = {r["run_id"] for r in runs}

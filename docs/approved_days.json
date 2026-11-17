@@ -1,0 +1,4 @@
+{
+  "_comment": "Extra (burst) snapshot days for the T2 release event. Jack adds entries on release day, each citing the section 12 row of docs/analysis_plan_t2_release_event.md that adopts the amendment. At most 7. Burst-day readings are excluded from every v1.0 and T1 computation.",
+  "burst_days": []
+}
