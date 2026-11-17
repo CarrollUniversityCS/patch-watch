@@ -1,7 +1,7 @@
-# Amendment T2 to the analysis plan: the T2 release event (DRAFT, NOT FROZEN)
+# Amendment T2 to the analysis plan: the T2 release event (FROZEN 2026-11-17T17:32:00Z)
 
-**Status: DRAFT written 2026-11-06, revised the same day after review. Not frozen, not a pre-registration until the freeze record
-below is completed.** The freeze must be recorded (commit and time written into this file) before the release that carries T2 and
+**Status: FROZEN 2026-11-17T17:32:00Z (see section 11). Drafted 2026-11-06 and revised the same day after review; no change to the plan text
+since commit cd35e4b. Only this status line, the title and section 11 were edited at the freeze.** The freeze must be recorded (commit and time written into this file) before the release that carries T2 and
 before anyone reads any reading taken for it. `docs/analysis_plan.md` (v1.0, frozen 2026-10-23), Amendment 1 and Amendment 2 are
 unchanged. Where this file and Amendment 2 section B3 disagree about when a burst starts, this file governs. This file is not the
 unadopted coverage-endpoints draft (`docs/proposed/amendment_3_coverage_endpoints_draft.md`); it carries its own name, not a number.
@@ -142,9 +142,13 @@ hosting provider named; no host-level cell under 10 is published.
 9. A person reads the advisory and ChangeLog and records the fixed versions and the t0 timestamp in a dated section 12 row; sets
    `published` and `fixed_releases` in `src/versions.py`; the detector matrix passes for the new branches.
 
-## 11. Freeze record (to be completed by Jack)
+## 11. Freeze record
 
-Frozen at (UTC): ____________  Commit: ____________  Before any T2 release or reading: yes / no
+Frozen at (UTC): 2026-11-17T17:32:00Z  Commit: cd35e4b (plan text; this freeze commit changes only the status line, title and this record)  Before any T2 release or reading: yes
+
+Recorded by Claude at Jack Forden's instruction and with his explicit permission, 2026-11-17. Basis for the word yes: the baseline snapshot of
+2026-11-18 14:00 UTC has not run (the last snapshots are 2026-11-11, and the 2026-11-16 and 2026-11-17 runs were skipped as non-snapshot days),
+and the PHP release watcher was installed on 2026-11-17 and has not yet recorded a release. Not independently checked against php.net at the freeze.
 
 ## 12. Deviation log (this amendment)
 
