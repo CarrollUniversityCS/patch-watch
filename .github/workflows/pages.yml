@@ -14,6 +14,8 @@ on:
       - "reports/**"
       - "dashboard/catalog.json"
       - "dashboard/measurability.json"
+      - "dashboard/region_map.json"
+      - "scripts/region_map.py"
       - "dashboard/template.html"
       - "src/**"
       - ".github/workflows/pages.yml"

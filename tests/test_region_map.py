@@ -40,3 +40,38 @@ def test_validate_refuses_exact_counts():
     m["regions"][0]["sites_observed"] = 2976
     with pytest.raises(ValueError):
         rm.validate(m)
+
+
+def test_joint_audit_recovers_nothing_from_bands():
+    m = rm.summarise([("WI", "VULNERABLE_BY_VERSION", 19), ("IA", "EOL_UNFIXED", 6), ("NY", "EOL_UNFIXED", 32)], "2026-11-18")
+    assert rm.audit(m) == []
+
+
+def test_joint_audit_catches_a_pinned_cell():
+    m = rm.summarise([("WI", "VULNERABLE_BY_VERSION", 19)], "2026-11-18")
+    # a region band of "under 10" forces its divisions to be at most 9, but "25 or more" with every division "under 10"
+    # is impossible, so a (wrongly) published combination fails the audit instead of passing silently
+    mw = [r for r in m["regions"] if r["region"] == "Midwest"][0]
+    mw["issues"] = "25 or more"
+    for d in mw["divisions"]:
+        d["issues"] = "under 10"
+    with pytest.raises(ValueError):
+        rm.validate(m)
+
+
+def test_refresh_refuses_a_burst_day_snapshot(tmp_path, monkeypatch):
+    import sqlite3
+    import datetime as dt
+    db = tmp_path / "s.db"
+    c = sqlite3.connect(db)
+    c.executescript("CREATE TABLE runs(snapshot_label TEXT, started_at_utc TEXT);"
+                    "CREATE TABLE domains(domain TEXT, state TEXT);"
+                    "CREATE TABLE observations(domain TEXT, snapshot_label TEXT, class TEXT);"
+                    "INSERT INTO runs VALUES('WI_20261118','2026-11-18T14:00:02Z'),('WI_20261120','2026-11-20T14:00:02Z');")
+    c.commit()
+    monkeypatch.setattr(rm.approved_days, "load", lambda *a, **k: (frozenset({dt.date(2026, 11, 20)}), []))
+    conn = sqlite3.connect(db)
+    assert rm.burst_labels(conn) == {"WI_20261120"}
+    assert rm.latest_labels(conn) == ["WI_20261118"]
+    with pytest.raises(SystemExit):
+        rm.main(["--db", str(db), "--labels", "WI_20261120", "--out", str(tmp_path / "o.json")])
