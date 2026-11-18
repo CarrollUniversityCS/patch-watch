@@ -34,6 +34,7 @@
   --st-hidden: #b4bac1;
   --st-withheld: #7d8590;
   --on-fill: #ffffff;
+  --rm1: #86b6ef; --rm2: #2a78d6; --rm3: #104281;
   --font-display: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
   --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-data: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -44,6 +45,7 @@
     --rule: #333c46; --rule-strong: #eceff2; --accent: #8db6ee; --accent-soft: #1c2a3d; --alert: #f09a68;
     --st-patched: #3fb8a0; --st-exposed: #ff5c7a; --st-eol: #f7b267; --st-hidden: #4a5560; --st-withheld: #77828e;
     --on-fill: #0b1320;
+    --rm1: #184f95; --rm2: #3987e5; --rm3: #9ec5f4;
     color-scheme: dark;
   }
 }
@@ -52,6 +54,7 @@
   --rule: #333c46; --rule-strong: #eceff2; --accent: #8db6ee; --accent-soft: #1c2a3d; --alert: #f09a68;
   --st-patched: #3fb8a0; --st-exposed: #ff5c7a; --st-eol: #f7b267; --st-hidden: #4a5560; --st-withheld: #77828e;
   --on-fill: #0b1320;
+  --rm1: #184f95; --rm2: #3987e5; --rm3: #9ec5f4;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -210,13 +213,22 @@ ol.tl-list li { margin: 3px 0; }
 .kev { align-self: flex-start; color: var(--alert); font-size: 13px; font-weight: 700; }
 
 /* not measurable */
-.rm-map { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-width: 760px; }
-.rm-tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
-.rm-tile h3 { margin: 0; font-size: 18px; }
-.rm-West { grid-column: 1; grid-row: 1; } .rm-Midwest { grid-column: 2; grid-row: 1; } .rm-Northeast { grid-column: 3; grid-row: 1; } .rm-South { grid-column: 2; grid-row: 2; }
-.rm-pips { display: flex; gap: 4px; margin: 2px 0; } .rm-pip { width: 16px; height: 10px; border: 1.5px solid var(--ink-2); box-sizing: border-box; } .rm-pip.on { background: var(--ink-2); }
-.rm-band { font-family: var(--font-data); font-size: 14px; }
-@media (max-width: 640px) { .rm-map { grid-template-columns: 1fr 1fr; } .rm-West, .rm-Midwest, .rm-Northeast, .rm-South { grid-column: auto; grid-row: auto; } }
+.rm-fig { margin: 0; max-width: 860px; }
+.rm-svg { display: block; width: 100%; height: auto; }
+.rm-d1 { fill: var(--rm1); stroke: var(--rm1); } .rm-d2 { fill: var(--rm2); stroke: var(--rm2); } .rm-d3 { fill: var(--rm3); stroke: var(--rm3); }
+.rm-d1, .rm-d2, .rm-d3 { stroke-width: 0.6; stroke-linejoin: round; }
+.rm-bd { fill: none; stroke: var(--surface); stroke-width: 0.9; stroke-linejoin: round; }
+.rm-rb { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
+.rm-chip rect { fill: var(--surface); stroke: var(--ink); stroke-width: 1; }
+.rm-chip text { fill: var(--ink); font-family: var(--font-body); }
+.rm-chip .n { font-weight: 700; font-size: 17px; } .rm-chip .b { font-size: 14px; } .rm-chip .c { font-size: 13px; fill: var(--ink-2); }
+.rm-key { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px 18px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 15px; }
+.rm-key b { font-weight: 700; }
+@media (min-width: 701px) { .rm-key { display: none; } }
+@media (max-width: 700px) { .rm-chip { display: none; } }
+.rm-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 14.5px; }
+.rm-legend li { display: flex; align-items: center; gap: 8px; }
+.rm-sw { width: 22px; height: 14px; border: 1px solid var(--ink-3); display: inline-block; }
 .nm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
 .nm-num { font-family: var(--font-display); font-size: 44px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 
@@ -456,6 +468,8 @@ main:focus { outline: none; }
     var us = unsupportedBlock(e);
     if (us) { main.appendChild(us); addNav("unsupported", "Unsupported software"); }
   });
+  var rmb = regionMapBlock(D.region_map, D.region_geo);
+  if (rmb) { main.appendChild(rmb); addNav("regions", "Regions"); }
 
   function legendBlock(e) {
     var legend = el("div", { class: "legend", role: "list" });
@@ -759,35 +773,52 @@ main:focus { outline: none; }
     return sec;
   }
 
-  // Region tile map: Census regions (the pooling groups of Amendment 1), bands only.
-  function regionMapBlock(m) {
-    if (!m) return null;
+  // Region map: the nine Census divisions shaded by issue band, region borders heavier. Bands only, never counts.
+  function regionMapBlock(m, geo) {
+    var CHIP = { West: [215, 215], Midwest: [500, 190], Northeast: [845, 325], South: [640, 545] };
+    if (!m || !geo) return null;
     var sec = el("section", { id: "regions", "aria-labelledby": "regions-h" }, [
       el("div", { class: "section-head" }, [
         el("h2", { id: "regions-h", text: "Where the observed issues are, by region" }),
-        el("p", { text: "Snapshot of " + m.snapshot_date + ". Each tile is a U.S. Census region. Issues are shown as bands, never exact counts, and the tiles are laid out roughly like the map, not drawn to scale." })
+        el("p", { text: "Snapshot of " + m.snapshot_date + ". The map is shaded by the nine Census divisions, with the four Census regions outlined and labelled. Issues are shown as bands, never exact counts." })
       ])
     ]);
-    var grid = el("div", { class: "rm-map", role: "list" });
-    m.regions.forEach(function (r) {
-      var level = m.bands.indexOf(r.issues) + 1;
-      var pips = el("div", { class: "rm-pips", "aria-hidden": "true" }, [1, 2, 3].map(function (i) { return el("span", { class: "rm-pip" + (i <= level ? " on" : "") }); }));
-      grid.appendChild(el("div", { class: "rm-tile rm-" + r.region, role: "listitem" }, [
-        el("h3", { text: r.region }), pips,
-        el("div", { class: "rm-band", text: "Issues: " + r.issues }),
-        el("div", { class: "fine", text: "About " + r.sites_observed.toLocaleString("en-US") + " sites observed" })
-      ]));
+    var band = {}, count = {};
+    m.regions.forEach(function (r) { r.divisions.forEach(function (d) { band[d.division] = m.bands.indexOf(d.issues) + 1; count[d.division] = d; }); });
+    var fmt = function (n) { return n.toLocaleString("en-US"); };
+    var svg = '<svg class="rm-svg" viewBox="' + geo.viewBox.join(" ") + '" role="img" aria-labelledby="rm-t rm-d"><title id="rm-t">Map of the United States shaded by division</title><desc id="rm-d">Each of the nine Census divisions is shaded by its band of observed issues: under 10, 10 to 24, or 25 or more. The same numbers are in the table below.</desc>';
+    Object.keys(geo.divisions).forEach(function (d) {
+      var c = count[d];
+      svg += '<path class="rm-d' + (band[d] || 1) + '" d="' + geo.divisions[d] + '"><title>' + d + ": issues " + (c ? c.issues : "n/a") + ", about " + (c ? fmt(c.sites_observed) : "?") + " sites checked</title></path>";
     });
-    sec.appendChild(grid);
+    svg += '<path class="rm-bd" d="' + geo.division_borders + '"/><path class="rm-rb" d="' + geo.region_borders + '"/>';
+    m.regions.forEach(function (r) {
+      var p = CHIP[r.region]; if (!p) return;
+      svg += '<g class="rm-chip" transform="translate(' + p[0] + " " + p[1] + ')"><rect x="-84" y="-30" width="168" height="64" rx="3"/>' +
+        '<text class="n" x="0" y="-10" text-anchor="middle">' + r.region + '</text>' +
+        '<text class="b" x="0" y="8" text-anchor="middle">Issues: ' + r.issues + '</text>' +
+        '<text class="c" x="0" y="26" text-anchor="middle">about ' + fmt(r.sites_observed) + ' sites checked</text></g>';
+    });
+    svg += "</svg>";
+    var fig = el("figure", { class: "rm-fig" }, [el("div", { html: svg })]);
+    var names = { 1: "Under 10 (0 to 9)", 2: "10 to 24", 3: "25 or more" };
+    var legend = el("ul", { class: "rm-legend", "aria-label": "Shading key: issues per division" }, [1, 2, 3].map(function (k) {
+      return el("li", null, [el("span", { class: "rm-sw", style: "background: var(--rm" + k + ")" }), el("span", { text: names[k] })]);
+    }));
+    fig.appendChild(legend);
+    fig.appendChild(el("ul", { class: "rm-key", "aria-label": "Issues by region" }, m.regions.map(function (r) {
+      return el("li", null, [el("b", { text: r.region + ": " }), "issues " + r.issues + ", about " + fmt(r.sites_observed) + " sites checked"]);
+    })));
+    sec.appendChild(fig);
     var rows = [];
-    m.regions.forEach(function (r) { r.divisions.forEach(function (d) { rows.push([r.region, d.division, "about " + d.sites_observed.toLocaleString("en-US"), d.issues]); }); });
+    m.regions.forEach(function (r) { r.divisions.forEach(function (d) { rows.push([r.region, d.division, "about " + fmt(d.sites_observed), d.issues]); }); });
     var table = el("table", null, [
-      el("caption", { text: "The nine Census divisions inside the four regions. Counts under 10 are shown as “under 10”." }),
-      el("thead", null, [el("tr", null, ["Region", "Division", "Sites observed", "Issues"].map(function (h) { return el("th", { scope: "col", text: h }); }))]),
+      el("caption", { text: "The nine Census divisions inside the four regions. Counts under 10 are shown as \u201Cunder 10\u201D." }),
+      el("thead", null, [el("tr", null, ["Region", "Division", "Sites checked", "Issues"].map(function (h) { return el("th", { scope: "col", text: h }); }))]),
       el("tbody", null, rows.map(function (r) { return el("tr", null, r.map(function (c) { return el("td", { text: c }); })); }))
     ]);
-    sec.appendChild(el("div", { class: "tbl-wrap" }, [table]));
-    sec.appendChild(el("p", { class: "fine", text: m.issue_definition }));
+    sec.appendChild(el("details", { class: "table-view box" }, [el("summary", { text: "Show the numbers as a table" }), el("div", { class: "tbl-wrap" }, [table])]));
+    sec.appendChild(el("p", { class: "fine", text: m.issue_definition + " \u201CSites checked\u201D counts every site requested, including those that did not answer." }));
     sec.appendChild(el("p", { class: "caveat", text: m.caveat + " Wisconsin is the primary arm; the other states are added in waves." }));
     return sec;
   }
@@ -816,8 +847,6 @@ main:focus { outline: none; }
     return el("details", { class: "table-view box" }, [el("summary", { text: "Show the numbers as a table" }), el("div", { class: "tbl-wrap" }, [table])]);
   }
 
-  var rmb = regionMapBlock(D.region_map);
-  if (rmb) { main.appendChild(rmb); addNav("regions", "Regions"); }
   var nm = measurabilityBlock(D.measurability);
   if (nm) { main.appendChild(nm); addNav("nm", "Not measurable"); }
 

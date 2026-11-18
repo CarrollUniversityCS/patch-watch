@@ -15,6 +15,7 @@ on:
       - "dashboard/catalog.json"
       - "dashboard/measurability.json"
       - "dashboard/region_map.json"
+      - "dashboard/region_geo.json"
       - "scripts/region_map.py"
       - "dashboard/template.html"
       - "src/**"

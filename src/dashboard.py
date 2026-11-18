@@ -316,9 +316,28 @@ def load_region_map(path: Path = REGION_MAP_PATH) -> dict[str, Any] | None:
     return m
 
 
+REGION_GEO_PATH = DASHBOARD_DIR / "region_geo.json"
+
+
+def load_region_geo(path: Path = REGION_GEO_PATH) -> dict[str, Any] | None:
+    """Division map shapes written by scripts/build_region_geo.py. Only path data is allowed (it is inlined as SVG)."""
+    p = Path(path)
+    if not p.exists():
+        return None
+    g = json.loads(p.read_text(encoding="utf-8"))
+    for f in ("viewBox", "divisions", "division_borders", "region_borders", "source_sha256"):
+        if f not in g:
+            raise ValueError(f"region_geo: lacks {f!r}")
+    paths = [g["division_borders"], g["region_borders"], *g["divisions"].values()]
+    if not all(re.fullmatch(r"[MLZ0-9,.\-]*", x) for x in paths):
+        raise ValueError("region_geo: path data may hold only M, L, Z, digits, comma, dot and minus")
+    return g
+
+
 def build_model(entries: list[dict[str, Any]], runs: list[dict[str, Any]], *,
                 suppressed: bool = True, measurability: dict[str, Any] | None = None,
-                region_map: dict[str, Any] | None = None) -> dict[str, Any]:
+                region_map: dict[str, Any] | None = None,
+                region_geo: dict[str, Any] | None = None) -> dict[str, Any]:
     sup = analyze.Suppressor(on=suppressed)
     pipeline_event = versions.get_event(None)
     out_entries = []
@@ -354,6 +373,7 @@ def build_model(entries: list[dict[str, Any]], runs: list[dict[str, Any]], *,
         "entries": out_entries,
         "measurability": measurability,
         "region_map": region_map,
+        "region_geo": region_geo,
     }
 
 
@@ -392,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out or (config.DATA_DIR / "dashboard_UNSUPPRESSED.html" if args.unsuppressed
                        else DASHBOARD_DIR / "index.html")
     model = build_model(load_catalog(), load_runs(), suppressed=not args.unsuppressed,
-                        measurability=load_measurability(), region_map=load_region_map())
+                        measurability=load_measurability(), region_map=load_region_map(), region_geo=load_region_geo())
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(model, TEMPLATE_PATH.read_text(encoding="utf-8"), args.fragment),
                    encoding="utf-8")

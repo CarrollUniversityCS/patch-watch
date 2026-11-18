@@ -75,3 +75,14 @@ def test_refresh_refuses_a_burst_day_snapshot(tmp_path, monkeypatch):
     assert rm.latest_labels(conn) == ["WI_20261118"]
     with pytest.raises(SystemExit):
         rm.main(["--db", str(db), "--labels", "WI_20261120", "--out", str(tmp_path / "o.json")])
+
+
+def test_committed_geometry_is_nine_divisions_of_path_data_only():
+    import re
+    geo = json.loads((Path(__file__).resolve().parent.parent / "dashboard" / "region_geo.json").read_text(encoding="utf-8"))
+    assert sorted(geo["divisions"]) == sorted(d for divs in rm.DIVISIONS.values() for d in divs)
+    assert len(geo["source_sha256"]) == 64 and "us-atlas" in geo["source"]
+    paths = [geo["division_borders"], geo["region_borders"], *geo["divisions"].values()]
+    assert all(re.fullmatch(r"[MLZ0-9,.\-]*", p) and p for p in paths)
+    text = json.dumps(geo)
+    assert not any(name in text for name in ("Alabama", "Wisconsin", "Texas"))     # no state names
