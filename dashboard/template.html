@@ -210,6 +210,13 @@ ol.tl-list li { margin: 3px 0; }
 .kev { align-self: flex-start; color: var(--alert); font-size: 13px; font-weight: 700; }
 
 /* not measurable */
+.rm-map { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-width: 760px; }
+.rm-tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.rm-tile h3 { margin: 0; font-size: 18px; }
+.rm-West { grid-column: 1; grid-row: 1; } .rm-Midwest { grid-column: 2; grid-row: 1; } .rm-Northeast { grid-column: 3; grid-row: 1; } .rm-South { grid-column: 2; grid-row: 2; }
+.rm-pips { display: flex; gap: 4px; margin: 2px 0; } .rm-pip { width: 16px; height: 10px; border: 1.5px solid var(--ink-2); box-sizing: border-box; } .rm-pip.on { background: var(--ink-2); }
+.rm-band { font-family: var(--font-data); font-size: 14px; }
+@media (max-width: 640px) { .rm-map { grid-template-columns: 1fr 1fr; } .rm-West, .rm-Midwest, .rm-Northeast, .rm-South { grid-column: auto; grid-row: auto; } }
 .nm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
 .nm-num { font-family: var(--font-display); font-size: 44px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 
@@ -752,6 +759,39 @@ main:focus { outline: none; }
     return sec;
   }
 
+  // Region tile map: Census regions (the pooling groups of Amendment 1), bands only.
+  function regionMapBlock(m) {
+    if (!m) return null;
+    var sec = el("section", { id: "regions", "aria-labelledby": "regions-h" }, [
+      el("div", { class: "section-head" }, [
+        el("h2", { id: "regions-h", text: "Where the observed issues are, by region" }),
+        el("p", { text: "Snapshot of " + m.snapshot_date + ". Each tile is a U.S. Census region. Issues are shown as bands, never exact counts, and the tiles are laid out roughly like the map, not drawn to scale." })
+      ])
+    ]);
+    var grid = el("div", { class: "rm-map", role: "list" });
+    m.regions.forEach(function (r) {
+      var level = m.bands.indexOf(r.issues) + 1;
+      var pips = el("div", { class: "rm-pips", "aria-hidden": "true" }, [1, 2, 3].map(function (i) { return el("span", { class: "rm-pip" + (i <= level ? " on" : "") }); }));
+      grid.appendChild(el("div", { class: "rm-tile rm-" + r.region, role: "listitem" }, [
+        el("h3", { text: r.region }), pips,
+        el("div", { class: "rm-band", text: "Issues: " + r.issues }),
+        el("div", { class: "fine", text: "About " + r.sites_observed.toLocaleString("en-US") + " sites observed" })
+      ]));
+    });
+    sec.appendChild(grid);
+    var rows = [];
+    m.regions.forEach(function (r) { r.divisions.forEach(function (d) { rows.push([r.region, d.division, "about " + d.sites_observed.toLocaleString("en-US"), d.issues]); }); });
+    var table = el("table", null, [
+      el("caption", { text: "The nine Census divisions inside the four regions. Counts under 10 are shown as “under 10”." }),
+      el("thead", null, [el("tr", null, ["Region", "Division", "Sites observed", "Issues"].map(function (h) { return el("th", { scope: "col", text: h }); }))]),
+      el("tbody", null, rows.map(function (r) { return el("tr", null, r.map(function (c) { return el("td", { text: c }); })); }))
+    ]);
+    sec.appendChild(el("div", { class: "tbl-wrap" }, [table]));
+    sec.appendChild(el("p", { class: "fine", text: m.issue_definition }));
+    sec.appendChild(el("p", { class: "caveat", text: m.caveat + " Wisconsin is the primary arm; the other states are added in waves." }));
+    return sec;
+  }
+
   function barLabel(p, e) {
     var pre = p.preliminary ? " Preliminary: fewer than " + e.preliminary_before_days + " days since the fix." : "";
     var when = "Day " + p.day.toFixed(1) + " (" + fmtDate(p.started) + "), " + p.funnel.domains + " sites checked";
@@ -776,6 +816,8 @@ main:focus { outline: none; }
     return el("details", { class: "table-view box" }, [el("summary", { text: "Show the numbers as a table" }), el("div", { class: "tbl-wrap" }, [table])]);
   }
 
+  var rmb = regionMapBlock(D.region_map);
+  if (rmb) { main.appendChild(rmb); addNav("regions", "Regions"); }
   var nm = measurabilityBlock(D.measurability);
   if (nm) { main.appendChild(nm); addNav("nm", "Not measurable"); }
 

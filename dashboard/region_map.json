@@ -1,0 +1,85 @@
+{
+ "snapshot_date": "2026-11-18",
+ "bands": [
+  "under 10",
+  "10 to 24",
+  "25 or more"
+ ],
+ "issue_definition": "Sites whose PHP version is below the fixed release or on an end-of-life branch with no fix.",
+ "caveat": "Observed version evidence, not a national estimate and not a ranking. Only a small share of sites show a readable PHP version, and they are not a random subset, so a region with fewer issues is not a safer region.",
+ "regions": [
+  {
+   "region": "Northeast",
+   "sites_observed": 3000,
+   "issues": "25 or more",
+   "divisions": [
+    {
+     "division": "New England",
+     "sites_observed": 1000,
+     "issues": "under 10"
+    },
+    {
+     "division": "Middle Atlantic",
+     "sites_observed": 2000,
+     "issues": "25 or more"
+    }
+   ]
+  },
+  {
+   "region": "Midwest",
+   "sites_observed": 2300,
+   "issues": "25 or more",
+   "divisions": [
+    {
+     "division": "East North Central",
+     "sites_observed": 1500,
+     "issues": "10 to 24"
+    },
+    {
+     "division": "West North Central",
+     "sites_observed": 800,
+     "issues": "under 10"
+    }
+   ]
+  },
+  {
+   "region": "South",
+   "sites_observed": 3800,
+   "issues": "25 or more",
+   "divisions": [
+    {
+     "division": "South Atlantic",
+     "sites_observed": 1800,
+     "issues": "10 to 24"
+    },
+    {
+     "division": "East South Central",
+     "sites_observed": 800,
+     "issues": "10 to 24"
+    },
+    {
+     "division": "West South Central",
+     "sites_observed": 1200,
+     "issues": "under 10"
+    }
+   ]
+  },
+  {
+   "region": "West",
+   "sites_observed": 2400,
+   "issues": "under 10",
+   "divisions": [
+    {
+     "division": "Mountain",
+     "sites_observed": 1300,
+     "issues": "under 10"
+    },
+    {
+     "division": "Pacific",
+     "sites_observed": 1200,
+     "issues": "under 10"
+    }
+   ]
+  }
+ ]
+}

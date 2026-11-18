@@ -300,8 +300,25 @@ def load_measurability(path: Path = MEASURABILITY_PATH) -> dict[str, Any] | None
     return m
 
 
+REGION_MAP_PATH = DASHBOARD_DIR / "region_map.json"
+
+
+def load_region_map(path: Path = REGION_MAP_PATH) -> dict[str, Any] | None:
+    """Optional banded region summary written by scripts/region_map.py (bands only). Checked here so a bad or
+    too-precise file stops the build."""
+    p = Path(path)
+    if not p.exists():
+        return None
+    sys.path.insert(0, str(config.ROOT / "scripts"))
+    import region_map
+    m = json.loads(p.read_text(encoding="utf-8"))
+    region_map.validate(m)
+    return m
+
+
 def build_model(entries: list[dict[str, Any]], runs: list[dict[str, Any]], *,
-                suppressed: bool = True, measurability: dict[str, Any] | None = None) -> dict[str, Any]:
+                suppressed: bool = True, measurability: dict[str, Any] | None = None,
+                region_map: dict[str, Any] | None = None) -> dict[str, Any]:
     sup = analyze.Suppressor(on=suppressed)
     pipeline_event = versions.get_event(None)
     out_entries = []
@@ -336,6 +353,7 @@ def build_model(entries: list[dict[str, Any]], runs: list[dict[str, Any]], *,
         "tiers": [{"key": k, "label": lab, "blurb": b} for k, lab, b in TIERS],
         "entries": out_entries,
         "measurability": measurability,
+        "region_map": region_map,
     }
 
 
@@ -374,7 +392,7 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out or (config.DATA_DIR / "dashboard_UNSUPPRESSED.html" if args.unsuppressed
                        else DASHBOARD_DIR / "index.html")
     model = build_model(load_catalog(), load_runs(), suppressed=not args.unsuppressed,
-                        measurability=load_measurability())
+                        measurability=load_measurability(), region_map=load_region_map())
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(model, TEMPLATE_PATH.read_text(encoding="utf-8"), args.fragment),
                    encoding="utf-8")
